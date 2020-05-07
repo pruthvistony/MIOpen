@@ -71,6 +71,24 @@ struct BlockwiseGenericTensorSliceCopy_v4
         mThreadwiseStore.SetDstSliceOrigin(dst_block_slice_origin + thread_data_id_begin);
     }
 
+    __device__ void SetSrcDstOrigin(const Index& src_block_slice_origin,
+		                    const Index& dst_block_slice_origin) 
+    {
+        // map threads to cluster
+        constexpr auto thread_cluster_desc =
+            make_cluster_descriptor(ThreadClusterLengths{}, ThreadClusterArrangeOrder{});
+
+        const auto thread_cluster_id =
+            thread_cluster_desc.CalculateClusterIndex(get_thread_local_1d_id());
+
+        const auto thread_data_id_begin = thread_cluster_id * ThreadSliceLengths{};
+        mThreadwiseLoad.SetSrcSliceOrigin(src_block_slice_origin + thread_data_id_begin);
+        mThreadwiseLoad.SetDstSliceOrigin(make_zero_array<index_t, nDim>());
+
+        mThreadwiseStore.SetSrcSliceOrigin(make_zero_array<index_t, nDim>());
+        mThreadwiseStore.SetDstSliceOrigin(dst_block_slice_origin + thread_data_id_begin);
+    }
+
     __device__ static constexpr index_t GetThreadBufferSize()
     {
         return ThreadBufferDesc::GetElementSpace();
