@@ -123,17 +123,19 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                                                 KPACK * GemmDataPerReadM,
                                                 KPACK * GemmDataPerReadN);
 
-        constexpr index_t num_kblocks = K/KPerBlock;
-        constexpr index_t required_shift_kperblock = 256/(KPerBlock*KPACK*2); 
-        constexpr index_t right_shift_kperblock = (num_kblocks > required_shift_kperblock) ? required_shift_kperblock: num_kblocks;
-        
+        constexpr index_t num_kblocks              = K / KPerBlock;
+        constexpr index_t required_shift_kperblock = 256 / (KPerBlock * KPACK);
+        constexpr index_t right_shift_kperblock =
+            (num_kblocks > required_shift_kperblock) ? required_shift_kperblock : num_kblocks;
+
         //   LDS
         //     be careful of LDS alignment
         constexpr auto a_k_m_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<KPerBlock, MPerBlock, KPACK>{}, Number<max_align>{});
 
-	const auto a_src_origin = {get_block_1d_id()*KPerBlock*right_shift_kperblock, k_block_data_on_global, 0}; 
- 
+        const auto a_src_origin = {
+            (get_block_1d_id() % right_shift_kperblock) * KPerBlock, k_block_data_on_global, 0};
+
         auto a_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
             BlockSize,
             decltype(a_k_m_kpack_global_desc),
@@ -156,7 +158,8 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         constexpr auto b_k_n_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<KPerBlock, NPerBlock, KPACK>{}, Number<max_align>{});
 
-	const auto b_src_origin = {get_block_1d_id()*KPerBlock*right_shift_kperblock, b_block_data_on_global, 0}; 
+        const auto b_src_origin = {
+            (get_block_1d_id() % right_shift_kperblock) * KPerBlock, b_block_data_on_global, 0};
 
         // input blockwise copy
         auto b_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
@@ -222,13 +225,15 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         using blockwise_a_copy_src_step = Sequence<KPerBlock, 0, 0>;
         using blockwise_b_copy_src_step = Sequence<KPerBlock, 0, 0>;
 
-	// Differnt workgroups starting at different kperblock requires
-	// two iterations to finish through all kperblocks
-	for(unsigned int kiter = 0; kiter < 2; ++kiter )
+        // Differnt workgroups starting at different kperblock requires
+        // two iterations to finish through all kperblocks
+        for(unsigned int kiter = 0; kiter < 2; ++kiter)
         {
             const bool even_loop = (kiter % 2 == 0);
-            index_t startK = even_loop ? get_block_1d_id() % (right_shift_kperblock*KPerBlock) : 0;
-            index_t endK = even_loop ? K : K - (get_block_1d_id() % right_shift_kperblock*KPerBlock);
+            index_t startK =
+                even_loop ? (get_block_1d_id() % right_shift_kperblock) * KPerBlock : 0;
+            index_t endK =
+                even_loop ? K : K - (get_block_1d_id() % right_shift_kperblock) * KPerBlock;
 
             if(kiter == 1)
             {
@@ -238,46 +243,47 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
 
             // LDS double buffer: preload data into LDS
             {
-                 a_blockwise_copy.Run(p_a_global, p_a_block_double);
-                 b_blockwise_copy.Run(p_b_global, p_b_block_double);
+                a_blockwise_copy.Run(p_a_global, p_a_block_double);
+                b_blockwise_copy.Run(p_b_global, p_b_block_double);
             }
 
             // LDS double buffer: main body
             for(index_t k_block_data_begin = startK; k_block_data_begin + 2 * KPerBlock < endK;
                 k_block_data_begin += 2 * KPerBlock)
             {
-#pragma     unroll
+#pragma unroll
                 for(index_t iloop = 0; iloop < 2; ++iloop)
                 {
                     const bool even_loop = (iloop % 2 == 0);
-    
+
                     ABFloat* p_a_block_now =
                         even_loop ? p_a_block_double : p_a_block_double + a_block_space;
                     ABFloat* p_b_block_now =
                         even_loop ? p_b_block_double : p_b_block_double + b_block_space;
-    
+
                     ABFloat* p_a_block_next =
                         even_loop ? p_a_block_double + a_block_space : p_a_block_double;
                     ABFloat* p_b_block_next =
                         even_loop ? p_b_block_double + b_block_space : p_b_block_double;
-    
+
                     ABFloat p_a_thread_buffer[a_blockwise_copy.GetThreadBufferSize()];
                     ABFloat p_b_thread_buffer[b_blockwise_copy.GetThreadBufferSize()];
-    
+
                     a_blockwise_copy.MoveSrcSliceWindow(blockwise_a_copy_src_step{}, True);
                     b_blockwise_copy.MoveSrcSliceWindow(blockwise_b_copy_src_step{}, True);
-    
+
                     __syncthreads();
-    
+
                     // LDS doubel buffer: load next data from device mem
                     a_blockwise_copy.RunLoadThreadBuffer(p_a_global, p_a_thread_buffer);
                     b_blockwise_copy.RunLoadThreadBuffer(p_b_global, p_b_thread_buffer);
-    
+
                     // LDS double buffer: GEMM on current data
                     // Vectorize the pointer to match with how half/bfloat16 datatypes are
                     // processed in gemm operation. Half type packs 4 half values while
                     // bfloat16 packs 2 bfloat16 values. Since gemm's matrix A and B
-                    // 2D indexes are computed with vectorized value in mind (e.g. float, half2, half4),
+                    // 2D indexes are computed with vectorized value in mind (e.g. float, half2,
+                    // half4),
                     // we recast datatype from a single half to 4 packed half/2 packed bfloat16
                     // respectively.
                     const typename vector_type<ABFloat, KPACK>::MemoryType* p_a_block_vec =
@@ -287,31 +293,31 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
                             p_b_block_now);
                     blockwise_gemm.Run(p_a_block_vec, p_b_block_vec, p_c_thread);
-    
+
                     // LDS double buffer: store next data to LDS
                     a_blockwise_copy.RunStoreThreadBuffer(p_a_thread_buffer, p_a_block_next);
                     b_blockwise_copy.RunStoreThreadBuffer(p_b_thread_buffer, p_b_block_next);
                 }
             }
-    
+
             // LDS double buffer: tail
             {
-                const bool has_two_iteration_left = ((endK-startK) % (2 * KPerBlock) == 0);
-    
+                const bool has_two_iteration_left = ((endK - startK) % (2 * KPerBlock) == 0);
+
                 if(has_two_iteration_left) // if has 2 iteration left
                 {
                     ABFloat p_a_thread_buffer[a_blockwise_copy.GetThreadBufferSize()];
                     ABFloat p_b_thread_buffer[b_blockwise_copy.GetThreadBufferSize()];
-    
+
                     a_blockwise_copy.MoveSrcSliceWindow(blockwise_a_copy_src_step{}, True);
                     b_blockwise_copy.MoveSrcSliceWindow(blockwise_b_copy_src_step{}, True);
-    
+
                     __syncthreads();
-    
+
                     // LDS double buffer: load last data from device mem
                     a_blockwise_copy.RunLoadThreadBuffer(p_a_global, p_a_thread_buffer);
                     b_blockwise_copy.RunLoadThreadBuffer(p_b_global, p_b_thread_buffer);
-    
+
                     // LDS double buffer: GEMM on 2nd-last data
                     const typename vector_type<ABFloat, KPACK>::MemoryType* p_a_block_vec =
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
@@ -320,15 +326,15 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
                             p_b_block_double);
                     blockwise_gemm.Run(p_a_block_vec, p_b_block_vec, p_c_thread);
-    
+
                     // LDS double buffer: store last data to LDS
                     a_blockwise_copy.RunStoreThreadBuffer(p_a_thread_buffer,
                                                           p_a_block_double + a_block_space);
                     b_blockwise_copy.RunStoreThreadBuffer(p_b_thread_buffer,
                                                           p_b_block_double + b_block_space);
-    
+
                     __syncthreads();
-    
+
                     // LDS double buffer: GEMM on current data
                     p_a_block_vec =
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
@@ -341,7 +347,7 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                 else // if has 1 iteration left
                 {
                     __syncthreads();
-    
+
                     // LDS double buffer: GEMM on last data
                     const typename vector_type<ABFloat, KPACK>::MemoryType* p_a_block_vec =
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
@@ -352,7 +358,7 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                     blockwise_gemm.Run(p_a_block_vec, p_b_block_vec, p_c_thread);
                 }
             }
-	}
+        }
 
         // load data from xldop_acc_regs
         blockwise_gemm.XdlopsMatrixCRead(p_c_thread);
@@ -501,10 +507,18 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         constexpr auto a_g_k_m_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<1, KPerBlock, MPerBlock, KPACK>{}, Number<max_align>{});
 
-        constexpr index_t num_kblocks = K/KPerBlock;
-        constexpr index_t required_shift_kperblock = 256/(KPerBlock*KPACK*2); 
-        constexpr index_t right_shift_kperblock = (num_kblocks > required_shift_kperblock) ? required_shift_kperblock: num_kblocks;
-	const auto a_src_origin = MultiIndex<4>({group_id, get_block_1d_id()*KPerBlock*right_shift_kperblock, m_block_data_on_global, 0}); 
+        constexpr index_t num_kblocks              = K / KPerBlock;
+        constexpr index_t required_shift_kperblock = 256 / (KPerBlock * KPACK * 2);
+        constexpr index_t right_shift_kperblock =
+            (num_kblocks > required_shift_kperblock) ? required_shift_kperblock : num_kblocks;
+        // static_assert(right_shift_kperblock == 8, "right_shift_kperblock is wrong");
+        constexpr index_t num_rightshift_blocks = K / (right_shift_kperblock * KPerBlock);
+        // static_assert(num_rightshift_blocks == 8, "num righshift blocks logic is wrong");
+        const auto a_src_origin = MultiIndex<4>(
+            {group_id,
+             (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock,
+             m_block_data_on_global,
+             0});
 
         auto a_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
             BlockSize,
@@ -528,7 +542,11 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         constexpr auto b_g_k_n_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<1, KPerBlock, NPerBlock, KPACK>{}, Number<max_align>{});
 
-	const auto b_src_origin = MultiIndex<4>({group_id, get_block_1d_id()*KPerBlock*right_shift_kperblock, n_block_data_on_global, 0}); 
+        const auto b_src_origin = MultiIndex<4>(
+            {group_id,
+             (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock,
+             n_block_data_on_global,
+             0});
 
         // input blockwise copy
         auto b_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
@@ -594,18 +612,26 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         using blockwise_a_copy_src_step = Sequence<0, KPerBlock, 0, 0>;
         using blockwise_b_copy_src_step = Sequence<0, KPerBlock, 0, 0>;
 
-	// Differnt workgroups starting at different kperblock requires
-	// two iterations to finish through all kperblocks
-	for(unsigned int kiter = 0; kiter < 2; ++kiter )
+        // Differnt workgroups starting at different kperblock requires
+        // two iterations to finish through all kperblocks
+        for(unsigned int kiter = 0; kiter < 2; ++kiter)
         {
             const bool even_loop = (kiter % 2 == 0);
-            index_t startK = even_loop ? get_block_1d_id() % (right_shift_kperblock*KPerBlock) : 0;
-            index_t endK = even_loop ? K : K - (get_block_1d_id() % right_shift_kperblock*KPerBlock);
+            index_t startK       = even_loop
+                                 ? (get_block_1d_id() % num_rightshift_blocks) * KPerBlock *
+                                       right_shift_kperblock
+                                 : 0;
+            index_t endK = even_loop ? K
+                                     : K -
+                                           (get_block_1d_id() % num_rightshift_blocks) * KPerBlock *
+                                               right_shift_kperblock;
 
             if(kiter == 1)
             {
-                a_blockwise_copy.SetSrcDstOrigin({group_id, 0, m_block_data_on_global, 0}, {0, 0, 0, 0});
-                b_blockwise_copy.SetSrcDstOrigin({group_id, 0, n_block_data_on_global, 0}, {0, 0, 0, 0});
+                a_blockwise_copy.SetSrcDstOrigin({group_id, 0, m_block_data_on_global, 0},
+                                                 {0, 0, 0, 0});
+                b_blockwise_copy.SetSrcDstOrigin({group_id, 0, n_block_data_on_global, 0},
+                                                 {0, 0, 0, 0});
             }
 
             // LDS double buffer: preload data into LDS
@@ -619,38 +645,39 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
             for(index_t k_block_data_begin = startK; k_block_data_begin + 2 * KPerBlock < endK;
                 k_block_data_begin += 2 * KPerBlock)
             {
-#pragma     unroll
+#pragma unroll
                 for(index_t iloop = 0; iloop < 2; ++iloop)
                 {
                     const bool even_loop = (iloop % 2 == 0);
-    
+
                     ABFloat* p_a_block_now =
                         even_loop ? p_a_block_double : p_a_block_double + a_block_space;
                     ABFloat* p_b_block_now =
                         even_loop ? p_b_block_double : p_b_block_double + b_block_space;
-    
+
                     ABFloat* p_a_block_next =
                         even_loop ? p_a_block_double + a_block_space : p_a_block_double;
                     ABFloat* p_b_block_next =
                         even_loop ? p_b_block_double + b_block_space : p_b_block_double;
-    
+
                     ABFloat p_a_thread_buffer[a_blockwise_copy.GetThreadBufferSize()];
                     ABFloat p_b_thread_buffer[b_blockwise_copy.GetThreadBufferSize()];
-    
+
                     a_blockwise_copy.MoveSrcSliceWindow(blockwise_a_copy_src_step{}, True);
                     b_blockwise_copy.MoveSrcSliceWindow(blockwise_b_copy_src_step{}, True);
-    
+
                     __syncthreads();
-    
+
                     // LDS doubel buffer: load next data from device mem
                     a_blockwise_copy.RunLoadThreadBuffer(p_a_global, p_a_thread_buffer);
                     b_blockwise_copy.RunLoadThreadBuffer(p_b_global, p_b_thread_buffer);
-    
+
                     // LDS double buffer: GEMM on current data
                     // Vectorize the pointer to match with how fp16/bfloat16 datatypes are
                     // processed in gemm operation. fp16 type packs 4 fp16 values while
                     // bfloat16 packs 2 bfloat16 values. Since gemm's matrix A and B
-                    // 2D indexes are computed with vectorized value in mind (e.g. float, half2, half4),
+                    // 2D indexes are computed with vectorized value in mind (e.g. float, half2,
+                    // half4),
                     // we recast datatype from a single fp16 to 4 packed fp16/2 packed bfloat16
                     // respectively.
                     const typename vector_type<ABFloat, KPACK>::MemoryType* p_a_block_vec =
@@ -660,30 +687,30 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
                             p_b_block_now);
                     blockwise_gemm.Run(p_a_block_vec, p_b_block_vec, p_c_thread);
-    
+
                     // LDS double buffer: store next data to LDS
                     a_blockwise_copy.RunStoreThreadBuffer(p_a_thread_buffer, p_a_block_next);
                     b_blockwise_copy.RunStoreThreadBuffer(p_b_thread_buffer, p_b_block_next);
                 }
             }
-    
+
             // LDS double buffer: tail
             {
-                const bool has_two_iteration_left = ((endK-startK) % (2 * KPerBlock) == 0);
+                const bool has_two_iteration_left = ((endK - startK) % (2 * KPerBlock) == 0);
                 if(has_two_iteration_left) // if has 2 iteration left
                 {
                     ABFloat p_a_thread_buffer[a_blockwise_copy.GetThreadBufferSize()];
                     ABFloat p_b_thread_buffer[b_blockwise_copy.GetThreadBufferSize()];
-    
+
                     a_blockwise_copy.MoveSrcSliceWindow(blockwise_a_copy_src_step{}, True);
                     b_blockwise_copy.MoveSrcSliceWindow(blockwise_b_copy_src_step{}, True);
-    
+
                     __syncthreads();
-    
+
                     // LDS double buffer: load last data from device mem
                     a_blockwise_copy.RunLoadThreadBuffer(p_a_global, p_a_thread_buffer);
                     b_blockwise_copy.RunLoadThreadBuffer(p_b_global, p_b_thread_buffer);
-    
+
                     // LDS double buffer: GEMM on 2nd-last data
                     const typename vector_type<ABFloat, KPACK>::MemoryType* p_a_block_vec =
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
@@ -692,15 +719,15 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
                             p_b_block_double);
                     blockwise_gemm.Run(p_a_block_vec, p_b_block_vec, p_c_thread);
-    
+
                     // LDS double buffer: store last data to LDS
                     a_blockwise_copy.RunStoreThreadBuffer(p_a_thread_buffer,
                                                           p_a_block_double + a_block_space);
                     b_blockwise_copy.RunStoreThreadBuffer(p_b_thread_buffer,
                                                           p_b_block_double + b_block_space);
-    
+
                     __syncthreads();
-    
+
                     // LDS double buffer: GEMM on current data
                     p_a_block_vec =
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
@@ -713,7 +740,7 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                 else // if has 1 iteration left
                 {
                     __syncthreads();
-    
+
                     // LDS double buffer: GEMM on last data
                     const typename vector_type<ABFloat, KPACK>::MemoryType* p_a_block_vec =
                         reinterpret_cast<const typename vector_type<ABFloat, KPACK>::MemoryType*>(
@@ -724,11 +751,11 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                     blockwise_gemm.Run(p_a_block_vec, p_b_block_vec, p_c_thread);
                 }
             }
-    	}
+        }
 
         // load data from xldop_acc_regs
         blockwise_gemm.XdlopsMatrixCRead(p_c_thread);
-    
+
         // copy output: register to global memory
         {
             ///\todo inconsistent layout of xdlops and tensor
