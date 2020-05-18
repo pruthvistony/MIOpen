@@ -124,17 +124,19 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                                                 KPACK * GemmDataPerReadN);
 
         constexpr index_t num_kblocks              = K / KPerBlock;
-        constexpr index_t required_shift_kperblock = 256 / (KPerBlock * KPACK);
+        constexpr index_t required_shift_kperblock = 256 / (KPerBlock * KPACK * 2);
         constexpr index_t right_shift_kperblock =
             (num_kblocks > required_shift_kperblock) ? required_shift_kperblock : num_kblocks;
+        // static_assert(right_shift_kperblock == 8, "right_shift_kperblock is wrong");
+        constexpr index_t num_rightshift_blocks = K / (right_shift_kperblock * KPerBlock);
 
         //   LDS
         //     be careful of LDS alignment
         constexpr auto a_k_m_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<KPerBlock, MPerBlock, KPACK>{}, Number<max_align>{});
 
-        const auto a_src_origin = {
-            (get_block_1d_id() % right_shift_kperblock) * KPerBlock, k_block_data_on_global, 0};
+        const auto a_src_origin = MultiIndex<3>{
+            (get_block_1d_id() % num_rightshift_blocks ) * right_shift_kperblock * KPerBlock, k_block_data_on_global, 0};
 
         auto a_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
             BlockSize,
@@ -158,8 +160,8 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         constexpr auto b_k_n_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<KPerBlock, NPerBlock, KPACK>{}, Number<max_align>{});
 
-        const auto b_src_origin = {
-            (get_block_1d_id() % right_shift_kperblock) * KPerBlock, b_block_data_on_global, 0};
+        const auto b_src_origin = MultiIndex<3>{
+            (get_block_1d_id() % num_rightshift_blocks ) * right_shift_kperblock * KPerBlock, b_block_data_on_global, 0};
 
         // input blockwise copy
         auto b_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
@@ -225,17 +227,17 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         using blockwise_a_copy_src_step = Sequence<KPerBlock, 0, 0>;
         using blockwise_b_copy_src_step = Sequence<KPerBlock, 0, 0>;
 
+        index_t staggeredK = (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock;
+
         // Differnt workgroups starting at different kperblock requires
         // two iterations to finish through all kperblocks
         for(unsigned int kiter = 0; kiter < 2; ++kiter)
         {
-            const bool even_loop = (kiter % 2 == 0);
-            index_t startK =
-                even_loop ? (get_block_1d_id() % right_shift_kperblock) * KPerBlock : 0;
-            index_t endK =
-                even_loop ? K : K - (get_block_1d_id() % right_shift_kperblock) * KPerBlock;
+            const bool even_kloop = (kiter % 2 == 0);
+            index_t startK = even_kloop ? staggeredK : 0;
+            index_t endK = even_kloop ? K : staggeredK;
 
-            if(kiter == 1)
+            if(!even_kloop)
             {
                 a_blockwise_copy.SetSrcDstOrigin({0, k_block_data_on_global, 0}, {0, 0, 0});
                 b_blockwise_copy.SetSrcDstOrigin({0, b_block_data_on_global, 0}, {0, 0, 0});
@@ -612,21 +614,17 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         using blockwise_a_copy_src_step = Sequence<0, KPerBlock, 0, 0>;
         using blockwise_b_copy_src_step = Sequence<0, KPerBlock, 0, 0>;
 
+        index_t staggeredK = (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock;
+
         // Differnt workgroups starting at different kperblock requires
         // two iterations to finish through all kperblocks
         for(unsigned int kiter = 0; kiter < 2; ++kiter)
         {
-            const bool even_loop = (kiter % 2 == 0);
-            index_t startK       = even_loop
-                                 ? (get_block_1d_id() % num_rightshift_blocks) * KPerBlock *
-                                       right_shift_kperblock
-                                 : 0;
-            index_t endK = even_loop ? K
-                                     : K -
-                                           (get_block_1d_id() % num_rightshift_blocks) * KPerBlock *
-                                               right_shift_kperblock;
+            const bool even_kloop = (kiter % 2 == 0);
+            index_t startK = even_kloop ? staggeredK : 0;
+            index_t endK = even_kloop ? K : staggeredK;
 
-            if(kiter == 1)
+            if(!even_kloop)
             {
                 a_blockwise_copy.SetSrcDstOrigin({group_id, 0, m_block_data_on_global, 0},
                                                  {0, 0, 0, 0});
