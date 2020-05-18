@@ -9,6 +9,46 @@
 #include "threadwise_generic_tensor_slice_copy.hpp"
 #include "blockwise_gemm_xdlops.hpp"
 
+// hip.amdgcn.bc - device routine
+/*
+   HW_ID Register bit structure
+   WAVE_ID     3:0     Wave buffer slot number. 0-9.
+   SIMD_ID     5:4     SIMD which the wave is assigned to within the CU.
+   PIPE_ID     7:6     Pipeline from which the wave was dispatched.
+   CU_ID       11:8    Compute Unit the wave is assigned to.
+   SH_ID       12      Shader Array (within an SE) the wave is assigned to.
+   SE_ID       14:13   Shader Engine the wave is assigned to.
+   TG_ID       19:16   Thread-group ID
+   VM_ID       23:20   Virtual Memory ID
+   QUEUE_ID    26:24   Queue from which this wave was dispatched.
+   STATE_ID    29:27   State ID (graphics only, not compute).
+   ME_ID       31:30   Micro-engine ID.
+ */
+
+/*
+   Encoding of parameter bitmask
+   HW_ID        5:0     HW_ID
+   OFFSET       10:6    Range: 0..31
+   SIZE         15:11   Range: 1..32
+ */
+
+/*
+  __smid returns the wave's assigned Compute Unit and Shader Engine.
+  The Compute Unit, CU_ID returned in bits 3:0, and Shader Engine, SE_ID in bits 5:4.
+  Note: the results vary over time.
+  SZ minus 1 since SIZE is 1-based.
+
+*/
+__device__ inline unsigned __get_smid(void)
+{
+
+    // GETREG_IMMED(SZ,OFF,REG) (((SZ) << 11) | ((OFF) << 6) | (REG))
+    // REG = 4
+    // OFF = 13
+    // SZ = 3
+    return (__builtin_amdgcn_s_getreg(4 | (13 << 6) | (3 << 11)));
+}
+
 namespace ck {
 
 template <index_t Gi,
@@ -135,8 +175,12 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         constexpr auto a_k_m_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<KPerBlock, MPerBlock, KPACK>{}, Number<max_align>{});
 
-        const auto a_src_origin = MultiIndex<3>{
-            (get_block_1d_id() % num_rightshift_blocks ) * right_shift_kperblock * KPerBlock, k_block_data_on_global, 0};
+        const auto a_src_origin = MultiIndex<3>{(__get_smid() % num_rightshift_blocks) *
+                                                    right_shift_kperblock * KPerBlock,
+                                                k_block_data_on_global,
+                                                0};
+
+        // printf("%d %d %d\n",__get_smid(),get_block_1d_id(), get_thread_local_1d_id());
 
         auto a_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
             BlockSize,
@@ -160,8 +204,10 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         constexpr auto b_k_n_kpack_block_desc = make_native_tensor_descriptor_aligned(
             Sequence<KPerBlock, NPerBlock, KPACK>{}, Number<max_align>{});
 
-        const auto b_src_origin = MultiIndex<3>{
-            (get_block_1d_id() % num_rightshift_blocks ) * right_shift_kperblock * KPerBlock, b_block_data_on_global, 0};
+        const auto b_src_origin = MultiIndex<3>{(__get_smid() % num_rightshift_blocks) *
+                                                    right_shift_kperblock * KPerBlock,
+                                                b_block_data_on_global,
+                                                0};
 
         // input blockwise copy
         auto b_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
@@ -227,15 +273,16 @@ struct GridwiseGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         using blockwise_a_copy_src_step = Sequence<KPerBlock, 0, 0>;
         using blockwise_b_copy_src_step = Sequence<KPerBlock, 0, 0>;
 
-        index_t staggeredK = (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock;
+        index_t staggeredK =
+            (__get_smid() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock;
 
         // Differnt workgroups starting at different kperblock requires
         // two iterations to finish through all kperblocks
         for(unsigned int kiter = 0; kiter < 2; ++kiter)
         {
             const bool even_kloop = (kiter % 2 == 0);
-            index_t startK = even_kloop ? staggeredK : 0;
-            index_t endK = even_kloop ? K : staggeredK;
+            index_t startK        = even_kloop ? staggeredK : 0;
+            index_t endK          = even_kloop ? K : staggeredK;
 
             if(!even_kloop)
             {
@@ -498,6 +545,9 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
                                                    ? (block_work_id[2] * NPerBlock)
                                                    : (block_work_id[1] * NPerBlock);
 
+        // if(get_thread_local_1d_id() == 0)
+        //   printf("%d %d\n",__get_smid(),get_block_1d_id());
+
         //   LDS mem
         constexpr index_t max_align = math::lcm(BBlockCopyDstDataPerWrite_KPACK,
                                                 ABlockCopyDstDataPerWrite_KPACK,
@@ -518,7 +568,7 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         // static_assert(num_rightshift_blocks == 8, "num righshift blocks logic is wrong");
         const auto a_src_origin = MultiIndex<4>(
             {group_id,
-             (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock,
+             (__get_smid() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock,
              m_block_data_on_global,
              0});
 
@@ -546,7 +596,7 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
 
         const auto b_src_origin = MultiIndex<4>(
             {group_id,
-             (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock,
+             (__get_smid() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock,
              n_block_data_on_global,
              0});
 
@@ -614,15 +664,16 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
         using blockwise_a_copy_src_step = Sequence<0, KPerBlock, 0, 0>;
         using blockwise_b_copy_src_step = Sequence<0, KPerBlock, 0, 0>;
 
-        index_t staggeredK = (get_block_1d_id() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock;
+        index_t staggeredK =
+            (__get_smid() % num_rightshift_blocks) * KPerBlock * right_shift_kperblock;
 
         // Differnt workgroups starting at different kperblock requires
         // two iterations to finish through all kperblocks
         for(unsigned int kiter = 0; kiter < 2; ++kiter)
         {
             const bool even_kloop = (kiter % 2 == 0);
-            index_t startK = even_kloop ? staggeredK : 0;
-            index_t endK = even_kloop ? K : staggeredK;
+            index_t startK        = even_kloop ? staggeredK : 0;
+            index_t endK          = even_kloop ? K : staggeredK;
 
             if(!even_kloop)
             {
