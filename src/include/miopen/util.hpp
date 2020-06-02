@@ -36,14 +36,14 @@ namespace miopen {
 struct Handle;
 
 float Im2ColGPU(
-    Handle& handle,
+    const Handle& handle,
     std::size_t spatial_dim,
     ConstData_t im,
     std::size_t im_offset,
     std::size_t in_c,
-    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1))& in_spatial,
-    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1))& wei_spatial,
-    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1))& out_spatial,
+    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1)) & in_spatial,
+    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1)) & wei_spatial,
+    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1)) & out_spatial,
     const std::vector<int>& pad_spatial,
     const std::vector<int>& stride_spatial,
     const std::vector<int>& dilation_spatial,
@@ -51,21 +51,21 @@ float Im2ColGPU(
     miopenDataType_t type);
 
 float Col2ImGPU(
-    Handle& handle,
+    const Handle& handle,
     std::size_t spatial_dim,
     ConstData_t col,
-    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1))& out_spatial,
-    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1))& wei_spatial,
+    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1)) & out_spatial,
+    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1)) & wei_spatial,
     const std::vector<int>& pad_spatial,
     const std::vector<int>& stride_spatial,
     const std::vector<int>& dilation_spatial,
     std::size_t in_c,
-    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1))& in_spatial,
+    const decltype(boost::adaptors::slice(std::vector<std::size_t>(), 0, 1)) & in_spatial,
     Data_t im,
     std::size_t im_offset,
     miopenDataType_t type);
 
-float transpose_NCHW2CNHW(Handle& handle,
+float transpose_NCHW2CNHW(const Handle& handle,
                           int n,
                           int c,
                           int h_in,
@@ -80,7 +80,7 @@ float transpose_NCHW2CNHW(Handle& handle,
                           int w_stride,
                           miopenDataType_t type);
 
-float transpose_CNHW2NCHW(Handle& handle,
+float transpose_CNHW2NCHW(const Handle& handle,
                           int n,
                           int c,
                           int h_out,
@@ -95,7 +95,7 @@ float transpose_CNHW2NCHW(Handle& handle,
                           int w_stride,
                           miopenDataType_t type);
 
-float transpose_NCHW2Vec(Handle& handle,
+float transpose_NCHW2Vec(const Handle& handle,
                          const std::vector<std::size_t>& lens,
                          ConstData_t in,
                          Data_t out,
@@ -105,7 +105,7 @@ float transpose_NCHW2Vec(Handle& handle,
                          const void* alpha,
                          const void* beta);
 
-float transpose_packed_MN2NM(Handle& handle,
+float transpose_packed_MN2NM(const Handle& handle,
                              int m,
                              int n,
                              int in_offset,

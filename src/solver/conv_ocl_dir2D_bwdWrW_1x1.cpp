@@ -251,9 +251,9 @@ ConvSolution ConvOclBwdWrW1x1::GetSolution(const ConvolutionContext& params) con
         if(params.pad_w > 0 || params.pad_h > 0 ||
            (n_passes == 1 && (params.kernel_stride_w > 1 || params.kernel_stride_h > 1)))
         {
-            read_unit = (out_pad_width % 4 == 0) ? 4 : (out_pad_width % 3 == 0)
-                                                           ? 3
-                                                           : (out_pad_width % 2 == 0) ? 2 : 1;
+            read_unit = (out_pad_width % 4 == 0)
+                            ? 4
+                            : (out_pad_width % 3 == 0) ? 3 : (out_pad_width % 2 == 0) ? 2 : 1;
             // read_unit = (out_pad_width % 7 == 0) ? 7 : (out_pad_width % 5 == 0) ? 5 :
             // (out_pad_width % 4 == 0) ? 4 : (out_pad_width % 3 == 0) ? 3 : (out_pad_width % 2
             // == 0) ? 2 : 1;
@@ -278,9 +278,9 @@ ConvSolution ConvOclBwdWrW1x1::GetSolution(const ConvolutionContext& params) con
         int n_lcl_in_map_once   = 8;
         int accum_sz            = n_lcl_out_map_once * n_lcl_in_map_once;
 
-        int write_unit = (out_pad_width % 4 == 0) ? 4 : (out_pad_width % 3 == 0)
-                                                            ? 3
-                                                            : (out_pad_width % 2 == 0) ? 2 : 1;
+        int write_unit = (out_pad_width % 4 == 0)
+                             ? 4
+                             : (out_pad_width % 3 == 0) ? 3 : (out_pad_width % 2 == 0) ? 2 : 1;
         int n_grp0_size0 = 256;
         // real input strides
         int in0_stride         = params.out_stride;
@@ -419,7 +419,7 @@ ConvSolution ConvOclBwdWrW1x1::GetSolution(const ConvolutionContext& params) con
         if(n_passes == 2)
         {
             result.invoker_factory = [ws_sz](const std::vector<Kernel>& kernels) {
-                return [=](Handle& handle, const boost::any& primitive_params) {
+                return [=](const Handle& handle, const boost::any& primitive_params) {
                     const auto ss_kernel   = handle.Run(kernels[0]);
                     const auto main_kernel = handle.Run(kernels[1]);
                     const auto invoke_params =
@@ -451,7 +451,7 @@ ConvSolution ConvOclBwdWrW1x1::GetSolution(const ConvolutionContext& params) con
         else if(n_passes == 1)
         {
             result.invoker_factory = [](const std::vector<Kernel>& kernels) {
-                return [=](Handle& handle, const boost::any& primitive_params) {
+                return [=](const Handle& handle, const boost::any& primitive_params) {
                     const auto k = handle.Run(kernels[0]);
                     const auto invoke_params =
                         boost::any_cast<conv::WrWInvokeParams>(primitive_params);

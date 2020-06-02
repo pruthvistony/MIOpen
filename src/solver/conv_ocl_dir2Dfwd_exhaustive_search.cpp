@@ -55,12 +55,12 @@ ConvOclDirectFwdLegacyExhaustiveSearch::GetPerformanceConfig(const ConvolutionCo
 {
     //
     LegacyPerformanceConfig result{};
-    result.in_tile0 = (params.in_width <= 8) ? 8 : (params.in_width <= 16)
-                                                       ? 16
-                                                       : 32; // size of input data per ALU plane
-    result.in_tile1 = (params.in_height <= 8) ? 8 : (params.in_height <= 16)
-                                                        ? 16
-                                                        : 32; // size of input data per ALU plane
+    result.in_tile0 = (params.in_width <= 8)
+                          ? 8
+                          : (params.in_width <= 16) ? 16 : 32; // size of input data per ALU plane
+    result.in_tile1 = (params.in_height <= 8)
+                          ? 8
+                          : (params.in_height <= 16) ? 16 : 32; // size of input data per ALU plane
 
     result.out_pix_tile0 =
         std::max(params.kernel_stride_w,
@@ -129,7 +129,7 @@ ConvOclDirectFwdLegacyExhaustiveSearch::GetPerformanceConfig(const ConvolutionCo
 * Measure the current configuration performance.
 */
 template <typename Tgpu, class... Solvers>
-static int MeasurePerfConfig(Handle& handle,
+static int MeasurePerfConfig(const Handle& handle,
                              ConstData_t bot_ocl_buf,
                              Data_t top_ocl_buf,
                              ConstData_t wei_ocl_buf,
