@@ -70,15 +70,29 @@ MIOPEN_DECLARE_ENV_VAR(MIOPEN_DEBUG_IMPLICIT_GEMM_FIND_ALL_SOLUTIONS)
 #if MIOPEN_ENABLE_SQLITE
 miopen::PerformanceDb mlo_construct_base::GetDb() const
 {
-    auto& h = _search_params.GetStream();
-    return {
+    auto& h                  = _search_params.GetStream();
+    miopen::PerformanceDb db = {
         db_path(), _search_params.GetUserPerfDbPath(), h.GetDeviceName(), h.GetMaxComputeUnits()};
+    // TODO: if env var
+    miopen::ProblemDescription prob_desc{miopen::conv::Direction::Forward};
+    prob_desc.in_data_type      = miopenFloat;
+    prob_desc.out_data_type     = miopenFloat;
+    prob_desc.weights_data_type = miopenFloat;
+    db.Process(prob_desc);
+    return db;
 }
 miopen::PerformanceDb miopen::GetDb(const miopen::ConvolutionContext& ctx)
 {
-    auto& h = ctx.GetStream();
-    return {
+    auto& h                  = ctx.GetStream();
+    miopen::PerformanceDb db = {
         ctx.GetPerfDbPath(), ctx.GetUserPerfDbPath(), h.GetDeviceName(), h.GetMaxComputeUnits()};
+    // TODO: if env var
+    miopen::ProblemDescription prob_desc{miopen::conv::Direction::Forward};
+    prob_desc.in_data_type      = miopenFloat;
+    prob_desc.out_data_type     = miopenFloat;
+    prob_desc.weights_data_type = miopenFloat;
+    db.Process(prob_desc);
+    return db;
 }
 #else
 miopen::PerformanceDb mlo_construct_base::GetDb() const

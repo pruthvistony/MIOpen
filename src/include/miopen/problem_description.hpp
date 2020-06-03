@@ -140,9 +140,77 @@ struct ProblemDescription
         f(self.bias, "bias");
         f(self.group_counts, "group_count");
     }
+    template <class Self>
+    static void Visit2(Self&& self, std::function<void(int&, std::string)> f)
+    {
+        // The column names match the driver command line argument names
+        f(self.spatial_dims, "spatial_dim");
+        f(self.n_inputs, "in_channels");
+        f(self.in_height, "in_h");
+        f(self.in_width, "in_w");
+        f(self.in_depth, "in_d");
+        f(self.kernel_size_h, "fil_h");
+        f(self.kernel_size_w, "fil_w");
+        f(self.kernel_size_d, "fil_d");
+        f(self.n_outputs, "out_channels");
+        f(self.batch_sz, "batchsize");
+        f(self.pad_h, "pad_h");
+        f(self.pad_w, "pad_w");
+        f(self.pad_d, "pad_d");
+        f(self.kernel_stride_h, "conv_stride_h");
+        f(self.kernel_stride_w, "conv_stride_w");
+        f(self.kernel_stride_d, "conv_stride_d");
+        f(self.kernel_dilation_h, "dilation_h");
+        f(self.kernel_dilation_w, "dilation_w");
+        f(self.kernel_dilation_d, "dilation_d");
+        f(self.bias, "bias");
+        f(self.group_counts, "group_count");
+    }
+    template <class Self>
+    static void Visit2(Self& self, std::function<void(std::string&, std::string)> f)
+    {
+        f(self.in_layout, "layout");
+        std::string data_type =
+            EncodeDataTypesForKey(self.in_data_type, self.weights_data_type, self.out_data_type);
+        f(data_type, "data_type");
+        if(data_type == "FP32")
+        {
+            self.in_data_type      = miopenFloat;
+            self.weights_data_type = miopenFloat;
+            self.out_data_type     = miopenFloat;
+        }
+        else if(data_type == "BF16")
+        {
+            self.in_data_type      = miopenBFloat16;
+            self.weights_data_type = miopenBFloat16;
+            self.out_data_type     = miopenBFloat16;
+        }
+        else if(data_type == "FP16")
+        {
+            self.in_data_type      = miopenHalf;
+            self.weights_data_type = miopenHalf;
+            self.out_data_type     = miopenHalf;
+        }
+        else
+            MIOPEN_THROW("ProblemDescription::data_type unknown");
+        std::string dir =
+            self.direction.IsForward() ? "F" : self.direction.IsBackwardData() ? "B" : "W";
+        f(dir, "direction");
+        if(dir == "F")
+            self.direction.Set(conv::Direction::Forward);
+        else if(dir == "B")
+            self.direction.Set(conv::Direction::BackwardData);
+        else if(dir == "W")
+            self.direction.Set(conv::Direction::BackwardWeights);
+        std::stringstream ss;
+
+        self.Serialize(ss);
+        std::string key = ss.str();
+        f(key, "key");
+    }
 
     template <class Self>
-    static void Visit(Self&& self, std::function<void(std::string, std::string)> f)
+    static void Visit(const Self& self, std::function<void(const std::string&, std::string)> f)
     {
         if(!self.direction.IsKnown())
             MIOPEN_THROW("!direction.IsKnown()");
@@ -153,6 +221,11 @@ struct ProblemDescription
         std::string dir =
             self.direction.IsForward() ? "F" : self.direction.IsBackwardData() ? "B" : "W";
         f(dir, "direction");
+
+        std::stringstream ss;
+        self.Serialize(ss);
+        std::string key = ss.str();
+        f(key, "key");
     }
     struct Direction
     {

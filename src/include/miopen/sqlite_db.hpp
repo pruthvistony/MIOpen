@@ -56,7 +56,33 @@ const auto MIOPEN_SQL_BUSY_TIMEOUT_MS = 60000;
 template <class Derived>
 struct SQLiteSerializable
 {
-    std::vector<std::string> FieldNames() const
+    static void Factory(Derived& d, std::unordered_map<std::string, std::string> kv)
+    {
+        Derived::Visit2(d, [&](std::string& value, const std::string& name) { value = kv[name]; });
+        Derived::Visit2(d,
+                        [&](int& value, const std::string& name) { value = std::stoi(kv[name]); });
+    }
+    std::vector<std::string> StrFieldNames()
+    {
+        std::vector<std::string> names;
+        Derived::Visit(static_cast<const Derived&>(*this),
+                       [&](const std::string& value, const std::string& name) {
+                           std::ignore = value;
+                           names.push_back(name);
+                       });
+        return names;
+    }
+    std::vector<std::string> IntFieldNames()
+    {
+        std::vector<std::string> names;
+        Derived::Visit(static_cast<const Derived&>(*this),
+                       [&](const int value, const std::string name) {
+                           std::ignore = value;
+                           names.push_back(name);
+                       });
+        return names;
+    }
+    std::vector<std::string> FieldNames()
     {
         std::vector<std::string> names;
         Derived::Visit(static_cast<const Derived&>(*this),
@@ -78,8 +104,11 @@ struct SQLiteSerializable
         std::vector<std::string> clauses;
         Derived::Visit(static_cast<const Derived&>(*this),
                        [&](const std::string& value, const std::string& name) {
-                           clauses.push_back("(" + name + " = ? )");
-                           values.push_back(value);
+                           if(name != "key")
+                           {
+                               clauses.push_back("(" + name + " = ? )");
+                               values.push_back(value);
+                           }
                        });
         Derived::Visit(static_cast<const Derived&>(*this),
                        [&](const int value, const std::string name) {
@@ -266,6 +295,8 @@ class SQLiteBase
         bool AllFound = true;
         for(auto& goldenName : goldenList)
         {
+            if(goldenName == "key")
+                continue;
             if(std::find(cfg_fds.begin(), cfg_fds.end(), goldenName) == cfg_fds.end())
             {
                 AllFound = false;
@@ -347,6 +378,40 @@ class SQLitePerfDb : public SQLiteBase<SQLitePerfDb>
                  bool is_system,
                  const std::string& arch_,
                  std::size_t num_cu_);
+    template <typename T, typename U>
+    void DumpAll(U f, T& prob_desc)
+    {
+        // std::vector<std::pair<T, boost::optional<DbRecord>>> res;
+        auto str_fds = prob_desc.StrFieldNames();
+        // auto len_str = str_fds.size();
+        auto int_fds = prob_desc.IntFieldNames();
+        // auto int_len = int_fds.size();
+        str_fds.insert(str_fds.end(), int_fds.begin(), int_fds.end());
+        std::string query = "SELECT " + miopen::JoinStrings(str_fds, ",") + " FROM  config;";
+
+        auto stmt = SQLite::Statement{sql, query};
+        // auto col_names = stmt.ColumnNames();
+        // auto cnt = col_names.size()
+        std::unordered_map<std::string, std::string> kv;
+        for(auto& it : str_fds)
+            kv[it] = "";
+        kv["vals"] = "";
+        auto cnt   = kv.size();
+        auto idx   = 0;
+        while(stmt.Step(sql) == SQLITE_ROW)
+        {
+            for(auto idx = 0; idx < cnt; idx++)
+            {
+                kv[str_fds[idx]] = stmt.ColumnText(idx);
+            }
+            T p;
+            T::Factory(p, kv);
+            auto rec = FindRecordUnsafe(p);
+            // res.push_back({p, rec});
+            f(p, rec);
+            ++idx;
+        }
+    }
 
     template <class T>
     inline void InsertConfig(const T& prob_desc)
@@ -401,7 +466,9 @@ class SQLitePerfDb : public SQLiteBase<SQLitePerfDb>
             "AND (num_cu = '" + std::to_string(num_cu) + "');";
         // clang-format on
         auto stmt = SQLite::Statement{sql, select_query, values};
-        DbRecord rec;
+        std::stringstream ss;
+        problem_config.Serialize(ss);
+        DbRecord rec(ss.str());
         while(true)
         {
             auto rc = stmt.Step(sql);
@@ -456,6 +523,15 @@ class SQLitePerfDb : public SQLiteBase<SQLitePerfDb>
     inline boost::optional<DbRecord>
     UpdateUnsafe(const T& problem_config, const std::string& id, const V& values)
     {
+        std::stringstream ss;
+        values.Serialize(ss);
+        return UpdateUnsafe(problem_config, id, ss.str());
+    }
+
+    template <class T>
+    inline boost::optional<DbRecord>
+    UpdateUnsafe(const T& problem_config, const std::string& id, const std::string& params)
+    {
         if(dbInvalid)
             return boost::none;
         // UPSERT the value
@@ -474,8 +550,6 @@ class SQLitePerfDb : public SQLiteBase<SQLitePerfDb>
 
         // UPSERT perf values
         {
-            std::ostringstream params;
-            values.Serialize(params);
             std::string clause;
             std::vector<std::string> vals;
             std::tie(clause, vals) = problem_config.WhereClause();
@@ -489,7 +563,7 @@ class SQLitePerfDb : public SQLiteBase<SQLitePerfDb>
                 "WHERE ( " + clause + " ) ) , ? , ? , ? , ?);";
             // clang-format on
             vals.push_back(id);
-            vals.push_back(params.str());
+            vals.push_back(params);
             vals.push_back(arch);
             vals.push_back(std::to_string(num_cu));
             auto stmt = SQLite::Statement{sql, query, vals};
@@ -501,8 +575,10 @@ class SQLitePerfDb : public SQLiteBase<SQLitePerfDb>
                 return boost::none;
             }
         }
-        DbRecord record;
-        record.SetValues(id, values);
+        std::stringstream ss;
+        problem_config.Serialize(ss);
+        DbRecord record(ss.str());
+        record.SetValues(id, params);
         return record;
     }
 

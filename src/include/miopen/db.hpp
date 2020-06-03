@@ -237,6 +237,30 @@ class MultiFileDb
         return _user.Remove(args...);
     }
 
+    template <typename U>
+    auto Process(U& args)
+    {
+        // go through each record in _installed and copy it to user db
+        MIOPEN_LOG_W("Loading database");
+        auto idx = 0;
+        _installed.DumpAll(
+            [&](auto p, auto opt_rec) {
+                if(opt_rec)
+                {
+                    auto rec = opt_rec.get();
+                    for(auto id_params : rec.map)
+                    {
+                        _user.Update(p, id_params.first, id_params.second);
+                    }
+                }
+                ++idx;
+                if(idx % 100 == 0)
+                    MIOPEN_LOG_W(idx << ": entries written");
+            },
+            args);
+        return true;
+    }
+
     private:
     template <class TDb, class TRet = decltype(TDb::GetCached("", true, "", 0))>
     static TRet GetDbInstance(rank<1>,
@@ -320,6 +344,12 @@ class DbTimer
     bool Remove(const U&... args)
     {
         return Measure("Remove", [&]() { return inner.Remove(args...); });
+    }
+
+    template <typename... U>
+    auto Process(U&... args)
+    {
+        return Measure("Process", [&]() { return inner.Process(args...); });
     }
 
     private:

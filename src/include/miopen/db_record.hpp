@@ -150,9 +150,10 @@ class DbRecord
         friend class DbRecord;
     };
 
+    std::unordered_map<std::string, std::string> map;
+
     private:
     std::string key;
-    std::unordered_map<std::string, std::string> map;
 
     template <class T>
     static // 'static' is for calling from ctor
