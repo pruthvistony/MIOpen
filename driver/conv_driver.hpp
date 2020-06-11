@@ -1037,6 +1037,8 @@ int ConvDriver<Tgpu, Tref>::AllocateBuffersAndCopy()
         if(wsSizeof != 0)
         {
             workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, wsSizeof, 1));
+            std::cout <<" First allocation of workspace_dev ptr: " << workspace_dev.get() << " GetMem:" <<workspace_dev.get()->GetMem()  << "workspace_size: "<< wsSizeof <<"\n";
+            std::cout << "ws_sizeof_find_fwd: "<< ws_sizeof_find_fwd << " ws_sizeof_find_bwd: "<< ws_sizeof_find_bwd << "ws_sizeof_find_wrw: "<< ws_sizeof_find_wrw << "\n";
         }
     }
 
@@ -1626,6 +1628,19 @@ void ConvDriver<Tgpu, Tref>::GetSolutionAfterFind(
 template <typename Tgpu, typename Tref>
 int ConvDriver<Tgpu, Tref>::RunForwardGpuFind(const bool is_transform)
 {
+#if MIOPEN_BACKEND_OPENCL
+    cl_context ctx;
+
+    clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
+#elif MIOPEN_BACKEND_HIP
+    uint32_t ctx = 0;
+#endif
+    workspace_dev.reset();
+    //if(perf_results[0].memory > 0)
+    workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, ws_sizeof_find_fwd/2, 1));
+    std::cout <<" reallocated  ptr in FWD Find " << workspace_dev.get() << " GetMem:" <<workspace_dev.get()->GetMem()  <<" ws_sizeof_find_fwd/2="<<ws_sizeof_find_fwd/2<<"\n";
+    std::cout <<" out_dev->GetMem()=" << out_dev->GetMem() << " in_dev->GetMem()=" <<in_dev->GetMem()<<" wei_dev->GetMem()="<<wei_dev->GetMem()<<"\n";
+
     int ret_algo_count;
     int request_algo_count = 2;
     // The library returns `request_algo_count` algorithms to the caller. However this does
@@ -1646,17 +1661,9 @@ int ConvDriver<Tgpu, Tref>::RunForwardGpuFind(const bool is_transform)
     float kernel_total_time = 0.0;
     float kernel_first_time = 0.0;
 
-#if MIOPEN_BACKEND_OPENCL
-    cl_context ctx;
 
-    clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#elif MIOPEN_BACKEND_HIP
-    uint32_t ctx = 0;
-#endif
 
-    workspace_dev.reset();
-    if(perf_results[0].memory > 0)
-        workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, perf_results[0].memory, 1));
+
 
     wall.start(wall_enabled);
 
@@ -2033,6 +2040,20 @@ int ConvDriver<Tgpu, Tref>::RunBackwardGPU()
 template <typename Tgpu, typename Tref>
 int ConvDriver<Tgpu, Tref>::RunBackwardDataGpuFind()
 {
+#if MIOPEN_BACKEND_OPENCL
+    cl_context ctx;
+
+    clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
+#elif MIOPEN_BACKEND_HIP
+    uint32_t ctx = 0;
+#endif
+
+    workspace_dev.reset();
+    //if(perf_results_data[0].memory > 0)
+    workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, ws_sizeof_find_bwd/2, 1));
+    std::cout <<" reallocated  ptr in BWD Find " << workspace_dev.get() <<" ws_sizeof_find_bwd/2="<<ws_sizeof_find_bwd/2<<"\n";
+    std::cout <<" dout_dev->GetMem()=" << dout_dev->GetMem() << " din_dev->GetMem()=" <<din_dev->GetMem()<<" wei_dev->GetMem()="<<wei_dev->GetMem()<<"\n";
+    
     int ret_algo_count;
     int request_algo_count = 2;
     std::vector<miopenConvAlgoPerf_t> perf_results_data(request_algo_count);
@@ -2048,17 +2069,6 @@ int ConvDriver<Tgpu, Tref>::RunBackwardDataGpuFind()
     float kernel_first_time = 0.0;
     float alpha = static_cast<float>(1), beta = static_cast<float>(0);
 
-#if MIOPEN_BACKEND_OPENCL
-    cl_context ctx;
-
-    clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#elif MIOPEN_BACKEND_HIP
-    uint32_t ctx = 0;
-#endif
-
-    workspace_dev.reset();
-    if(perf_results_data[0].memory > 0)
-        workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, perf_results_data[0].memory, 1));
 
     wall.start(wall_enabled);
 
@@ -2233,6 +2243,20 @@ void ConvDriver<Tgpu, Tref>::PrintBackwardDataTime(float kernel_total_time, floa
 template <typename Tgpu, typename Tref>
 int ConvDriver<Tgpu, Tref>::RunBackwardWrwGpuFind()
 {
+#if MIOPEN_BACKEND_OPENCL
+    cl_context ctx;
+
+    clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
+#elif MIOPEN_BACKEND_HIP
+    uint32_t ctx = 0;
+#endif
+
+    workspace_dev.reset();
+    //if(perf_results_weights[0].memory > 0)
+    workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, ws_sizeof_find_wrw/2, 1));
+    std::cout <<" reallocated  ptr in WRW Find " << workspace_dev.get() << " GetMem:" <<workspace_dev.get()->GetMem() <<" ws_sizeof_find_wrw /2="<<ws_sizeof_find_wrw /2<<"\n";
+    std::cout <<" dout_dev->GetMem()=" << dout_dev->GetMem() << " in_dev->GetMem()=" <<in_dev->GetMem()<<" dwei_dev->GetMem()="<<dwei_dev->GetMem()<<"\n";
+
     int ret_algo_count;
     int request_algo_count = 2;
 
@@ -2256,17 +2280,6 @@ int ConvDriver<Tgpu, Tref>::RunBackwardWrwGpuFind()
     const auto ws_size = perf_results_weights[0].memory;
     is_wrw_winograd    = (algo == miopenConvolutionBwdWeightsAlgoWinograd);
 
-#if MIOPEN_BACKEND_OPENCL
-    cl_context ctx;
-
-    clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#elif MIOPEN_BACKEND_HIP
-    uint32_t ctx = 0;
-#endif
-
-    workspace_dev.reset();
-    if(perf_results_weights[0].memory > 0)
-        workspace_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, perf_results_weights[0].memory, 1));
 
     wall.start(wall_enabled);
 
