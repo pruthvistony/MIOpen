@@ -786,9 +786,13 @@ ConvHipImplicitGemmForwardV4R4Xdlops::GetPerformanceConfig(const ConvolutionCont
 
 ConvSolution ConvHipImplicitGemmForwardV4R4Xdlops::GetSolution(
     const ConvolutionContext& ctx,
-    const PerformanceImplicitGemmForwardV4R4Xdlops& config,
+    const PerformanceImplicitGemmForwardV4R4Xdlops& config_,
     bool) const
 {
+#if 1
+    auto config = PerformanceImplicitGemmForwardV4R4Xdlops{256, 128, 4, 128, 64, 8, 0, 1};
+#endif
+
     ConvSolution result;
     KernelInfo construction_parameters;
 
