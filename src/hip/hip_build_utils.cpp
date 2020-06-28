@@ -112,7 +112,7 @@ boost::filesystem::path HipBuild(boost::optional<TmpDir>& tmp_dir,
     {
         if(params.find("-std=") == std::string::npos)
             params += " --std=c++11";
-        params += " --cuda-gpu-arch=" + dev_name;
+        params += " --cuda-gpu-arch=gfx908";
         params += " --cuda-device-only";
         params += " -c";
         params += " -O3 ";

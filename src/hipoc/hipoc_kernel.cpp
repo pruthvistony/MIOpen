@@ -60,6 +60,7 @@ void HIPOCKernelInvoke::run(void* args, std::size_t size) const
 
     MIOPEN_HANDLE_LOCK
 
+#if 0
     auto status = hipHccModuleLaunchKernel(fun,
                                            gdims[0],
                                            gdims[1],
@@ -75,6 +76,7 @@ void HIPOCKernelInvoke::run(void* args, std::size_t size) const
                                            stop.get());
     if(status != hipSuccess)
         MIOPEN_THROW_HIP_STATUS(status, "Failed to launch kernel");
+#endif
 
     if(callback)
     {

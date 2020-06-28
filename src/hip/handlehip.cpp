@@ -56,6 +56,8 @@
 
 #define MIOPEN_WORKAROUND_ROCM_COMPILER_SUPPORT_ISSUE_30 MIOPEN_USE_COMGR
 
+MIOPEN_DECLARE_ENV_VAR(MIOPEN_DEBUG_NO_KERNEL_INVOKE)
+
 namespace miopen {
 
 #if MIOPEN_WORKAROUND_ROCM_COMPILER_SUPPORT_ISSUE_30
@@ -332,7 +334,15 @@ Invoker Handle::PrepareInvoker(const InvokerFactory& factory,
                                                         kernels.size());
         built.push_back(kernel);
     }
-    return factory(built);
+
+    if(IsEnabled(MIOPEN_DEBUG_NO_KERNEL_INVOKE{}))
+    {
+        return [](auto&&...){};
+    }
+    else
+    {
+        return factory(built);
+    }
 }
 
 void Handle::ClearKernels(const std::string& algorithm, const std::string& network_config) const

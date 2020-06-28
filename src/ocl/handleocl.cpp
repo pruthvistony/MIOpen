@@ -50,6 +50,8 @@
 #include <unistd.h>
 #endif
 
+MIOPEN_DECLARE_ENV_VAR(MIOPEN_DEBUG_NO_KERNEL_INVOKE)
+
 namespace miopen {
 
 #ifndef NDEBUG
@@ -522,7 +524,15 @@ Invoker Handle::PrepareInvoker(const InvokerFactory& factory,
                                                         kernels.size());
         built.push_back(kernel);
     }
-    return factory(built);
+
+    if(IsEnabled(MIOPEN_DEBUG_NO_KERNEL_INVOKE{}))
+    {
+        return [](auto&&...){};
+    }
+    else
+    {
+        return factory(built);
+    }
 }
 
 bool Handle::HasKernel(const std::string& algorithm, const std::string& network_config) const
