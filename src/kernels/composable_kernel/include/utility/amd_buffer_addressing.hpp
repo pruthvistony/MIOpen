@@ -196,6 +196,7 @@ __device__ float amd_buffer_load<float, 1>(const float* p_src_wave,
 
     index_t src_thread_addr_offset = src_thread_data_offset * sizeof(float);
 
+#if 1
 #if !CK_EXPERIMENTAL_AMD_BUFFER_ADDRESSING_USE_OFFSET_TRICK
     return __llvm_amdgcn_buffer_load_f32(src_wave_buffer_resource.data,
                                          0,
@@ -208,6 +209,13 @@ __device__ float amd_buffer_load<float, 1>(const float* p_src_wave,
 
     return __llvm_amdgcn_buffer_load_f32(
         src_wave_buffer_resource.data, 0, src_addr_base + src_thread_addr_offset, false, false);
+#endif
+#else
+    return src_thread_data_valid ? __llvm_amdgcn_buffer_load_f32(src_wave_buffer_resource.data,
+                                         0,
+                                         src_thread_addr_offset,
+                                         false,
+                                         false) : 0;
 #endif
 }
 
