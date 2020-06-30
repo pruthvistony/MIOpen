@@ -133,7 +133,6 @@ boost::filesystem::path HipBuild(boost::optional<TmpDir>& tmp_dir,
         params += " -mllvm --amdgpu-spill-vgpr-to-agpr=0";
     }
 
-#if MIOPEN_BUILD_DEV
     if(miopen::IsEnabled(MIOPEN_DEBUG_HIP_VERBOSE{}))
     {
         params += " -v";
@@ -153,7 +152,6 @@ boost::filesystem::path HipBuild(boost::optional<TmpDir>& tmp_dir,
             params += " -save-temps";
         }
     }
-#endif
 
     params += " ";
     auto bin_file = tmp_dir->path / (filename + ".o");
