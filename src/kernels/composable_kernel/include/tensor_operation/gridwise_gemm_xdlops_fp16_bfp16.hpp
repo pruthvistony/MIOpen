@@ -758,6 +758,35 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
     }
 };
 
+constexpr index_t group_size = 4;
+constexpr index_t blk_size   = 32;
+
+template <class T>
+struct xdlops_group
+{
+    index_t blk_id;
+    index_t grp_id;
+    typename vector_type<T, group_size>::MemoryType data;
+
+    __device__ static void merge(xdlops_group<T> ar1[], xdlops_group<T> ar2[], int n)
+    {
+        //for(int i = n - 1; i >= 0; i--)
+        //{
+            //int j;
+            //xdlops_group<T> last = ar1[n - 1];
+            //for(j          = n - 2; j >= 0 && ar1[j].grp_id > ar2[i].grp_id; j--)
+                //ar1[j + 1] = ar1[j];
+
+            //// If there was a greater element
+            //if(j != n - 2 || last.grp_id > ar2[i].grp_id)
+            //{
+                //ar1[j + 1] = ar2[i];
+                //ar2[i]     = last;
+            //}
+        //}
+    }
+};
+
 template <index_t GridSize,
           index_t BlockSize,
           class ABFloat,
@@ -916,8 +945,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
 
         constexpr index_t wave_size      = 64;
         constexpr index_t copy_buff_size = (a_block_space + b_block_space) * sizeof(ABFloat);
-        constexpr index_t shfl_buff_size =
-            wave_size * c_k_thread_mtx_desc.GetElementSpace() * sizeof(AccFloat);
+        constexpr index_t shfl_buff_size = BlockSize * sizeof(xdlops_group<AccFloat>);
         constexpr index_t lds_buff_size =
             copy_buff_size > shfl_buff_size ? copy_buff_size : shfl_buff_size;
 
@@ -991,37 +1019,45 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         // load data from xldop_acc_regs
         blockwise_gemm.XdlopsMatrixCRead(p_c_thread);
 
-// out-of-place shuffle
+// in-place shuffle
 #if 1
         {
-            constexpr index_t group_size = 4;
-            typename vector_type<AccFloat, group_size>::MemoryType* shfl_buff =
-                reinterpret_cast<typename vector_type<AccFloat, group_size>::MemoryType*>(lds_buff);
+            constexpr index_t num_waves  = BlockSize / wave_size;
+            constexpr index_t num_groups = c_k_thread_mtx_desc.GetElementSpace() / group_size;
+            constexpr index_t shfl_size = num_groups / 2; 
 
-            typename vector_type<AccFloat, group_size>::MemoryType* reg_buff =
+            typename vector_type<AccFloat, group_size>::MemoryType* local_reg_c =
                 reinterpret_cast<typename vector_type<AccFloat, group_size>::MemoryType*>(
                     p_c_thread);
 
-            constexpr index_t num_waves  = BlockSize / wave_size;
-            constexpr index_t num_groups = c_k_thread_mtx_desc.GetElementSpace() / group_size;
+            xdlops_group<AccFloat> local_reg_c_groups[shfl_size];
 
             const index_t thread_id = get_thread_local_1d_id();
             const index_t wave_id   = thread_id / wave_size;
             const index_t lane_id   = thread_id % wave_size;
+            const index_t blk_id    = lane_id / blk_size;
+            const index_t blk_td    = lane_id % blk_size;
 
-            for(index_t active_wave = 0; active_wave < num_waves; ++active_wave)
+            for(index_t i = 0; i < shfl_size; i++)
             {
-                if(wave_id == active_wave)
-                {
-                    for(index_t i = 0; i < num_groups; ++i)
-                    {
-                        shfl_buff[lane_id * num_groups + i] = reg_buff[i];
-                        reg_buff[i] = shfl_buff[(lane_id + 32) % wave_size * num_groups + i];
-                    }
-                }
-
-                block_sync_lds();
+                local_reg_c_groups[i].blk_id = blk_id;
+                local_reg_c_groups[i].grp_id = blk_id + 2 * i;
+                local_reg_c_groups[i].data   = local_reg_c[i];
             }
+
+            xdlops_group<AccFloat> *shfl_buff = reinterpret_cast<xdlops_group<AccFloat> *>(lds_buff) + wave_id * wave_size;
+
+            for(index_t i = 0; i < shfl_size; i++)
+            {
+                shfl_buff[lane_id] = local_reg_c_groups[i];
+                local_reg_c_groups[i] = shfl_buff[(lane_id + 32) % wave_size];
+            }
+
+            for(index_t i = 0; i < shfl_size; i++)
+            {
+                local_reg_c[i] = local_reg_c_groups[i].data;
+            }
+            //xdlops_group<AccFloat>::merge(&local_reg_c_groups[0], &local_reg_c_groups[num_groups / 2], num_groups / 2);
         }
 #endif
 
