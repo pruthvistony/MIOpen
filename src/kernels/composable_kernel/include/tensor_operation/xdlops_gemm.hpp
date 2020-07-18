@@ -480,13 +480,20 @@ struct XdlopsGemm_t
 
     struct OutputLayout
     {
+        __device__ static constexpr index_t M4() { return MRepeats; }
+
         __device__ static constexpr index_t M3() { return GetNumXdlops(); }
+
         __device__ static constexpr index_t M2()
         {
             return IsABroadcast() ? 1 : GetMFMAInfo().num_output_blks;
         }
         __device__ static constexpr index_t M1() { return GetMFMAInfo().num_groups_blk; }
+
         __device__ static constexpr index_t M0() { return GetMFMAInfo().group_size; }
+
+        __device__ static constexpr index_t N2() { return NRepeats; }
+
         __device__ static constexpr index_t N1()
         {
             return IsABroadcast() ? GetMFMAInfo().num_output_blks : 1;
@@ -933,19 +940,42 @@ struct XdlopsGemm_t
 
     __device__ static MatrixIndex GetBeginOfThreadBlk(index_t i)
     {
-        const index_t xdlops_id = i;
+        const index_t xdlops_i = i / GetNumBlksPerXdlops();
+        const index_t j        = i % GetNumBlksPerXdlops();
 
-        const index_t m_i = xdlops_id / NRepeats;
-        const index_t n_i = xdlops_id % NRepeats;
+        const index_t m_i = xdlops_i / NRepeats;
+        const index_t n_i = xdlops_i % NRepeats;
 
+        constexpr auto mfma_type = GetMFMAInfo();
+
+        const index_t laneId = get_thread_local_1d_id() % mfma_type.wave_size;
+        const index_t blk_id = laneId / mfma_type.num_threads_blk;
+        const index_t blk_td = laneId % mfma_type.num_threads_blk;
+
+        index_t col_blk = j % mfma_type.num_output_blks;
+        index_t row_blk = j / mfma_type.num_output_blks;
+
+        static_if<!IsABroadcast()>{}([&](auto) {
+            col_blk = j / mfma_type.num_output_blks;
+            row_blk = j % mfma_type.num_output_blks;
+        });
+
+        index_t col = col_blk * mfma_type.n + blk_td + n_i * NPerXdlops;
+        index_t row = row_blk * mfma_type.m + blk_id * mfma_type.group_size + m_i * MPerXdlops;
+
+        return MatrixIndex{row, col};
+    }
+
+    __device__ static MatrixIndex GetBeginOfThreadXdlops()
+    {
         constexpr auto mfma_type = GetMFMAInfo();
 
         const index_t laneId        = get_thread_local_1d_id() % mfma_type.wave_size;
         const index_t thread_blk_id = laneId / mfma_type.num_threads_blk;
         const index_t thread_blk_td = laneId % mfma_type.num_threads_blk;
 
-        index_t col = thread_blk_td + n_i * NPerXdlops;
-        index_t row = thread_blk_id * mfma_type.group_size + m_i * MPerXdlops;
+        index_t col = thread_blk_td;
+        index_t row = thread_blk_id * mfma_type.group_size;
 
         return MatrixIndex{row, col};
     }
