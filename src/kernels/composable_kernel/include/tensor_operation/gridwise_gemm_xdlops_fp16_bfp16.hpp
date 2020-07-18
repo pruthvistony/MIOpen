@@ -758,35 +758,6 @@ struct GridwiseBatchedGemmTransposedANormalBNormalCXdlopsFp16Bfp16_v1
     }
 };
 
-constexpr index_t group_size = 4;
-constexpr index_t blk_size   = 32;
-
-template <class T>
-struct xdlops_group
-{
-    index_t blk_id;
-    index_t grp_id;
-    typename vector_type<T, group_size>::MemoryType data;
-
-    __device__ static void merge(xdlops_group<T> ar1[], xdlops_group<T> ar2[], int n)
-    {
-        //for(int i = n - 1; i >= 0; i--)
-        //{
-            //int j;
-            //xdlops_group<T> last = ar1[n - 1];
-            //for(j          = n - 2; j >= 0 && ar1[j].grp_id > ar2[i].grp_id; j--)
-                //ar1[j + 1] = ar1[j];
-
-            //// If there was a greater element
-            //if(j != n - 2 || last.grp_id > ar2[i].grp_id)
-            //{
-                //ar1[j + 1] = ar2[i];
-                //ar2[i]     = last;
-            //}
-        //}
-    }
-};
-
 template <index_t GridSize,
           index_t BlockSize,
           class ABFloat,
@@ -944,8 +915,10 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             math::integer_least_multiple(b_g_k_n_kpack_block_desc.GetElementSpace(), max_align);
 
         constexpr index_t wave_size      = 64;
+        constexpr index_t num_waves      = BlockSize / wave_size;
         constexpr index_t copy_buff_size = (a_block_space + b_block_space) * sizeof(ABFloat);
-        constexpr index_t shfl_buff_size = BlockSize * sizeof(xdlops_group<AccFloat>);
+        constexpr index_t shfl_buff_size =
+            blockwise_gemm.GetOutputLayout().template GetShflBuffSize<AccFloat>() * num_waves;
         constexpr index_t lds_buff_size =
             copy_buff_size > shfl_buff_size ? copy_buff_size : shfl_buff_size;
 
@@ -1019,47 +992,13 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         // load data from xldop_acc_regs
         blockwise_gemm.XdlopsMatrixCRead(p_c_thread);
 
-// in-place shuffle
-#if 1
-        {
-            constexpr index_t num_waves  = BlockSize / wave_size;
-            constexpr index_t num_groups = c_k_thread_mtx_desc.GetElementSpace() / group_size;
-            constexpr index_t shfl_size = num_groups / 2; 
+        // for(int i = 0; i < c_k_thread_mtx_desc.GetElementSpace(); i++)
+        //{
+        // p_c_thread[i] = get_thread_local_1d_id() * 1000 + i;
+        //}
 
-            typename vector_type<AccFloat, group_size>::MemoryType* local_reg_c =
-                reinterpret_cast<typename vector_type<AccFloat, group_size>::MemoryType*>(
-                    p_c_thread);
-
-            xdlops_group<AccFloat> local_reg_c_groups[shfl_size];
-
-            const index_t thread_id = get_thread_local_1d_id();
-            const index_t wave_id   = thread_id / wave_size;
-            const index_t lane_id   = thread_id % wave_size;
-            const index_t blk_id    = lane_id / blk_size;
-            const index_t blk_td    = lane_id % blk_size;
-
-            for(index_t i = 0; i < shfl_size; i++)
-            {
-                local_reg_c_groups[i].blk_id = blk_id;
-                local_reg_c_groups[i].grp_id = blk_id + 2 * i;
-                local_reg_c_groups[i].data   = local_reg_c[i];
-            }
-
-            xdlops_group<AccFloat> *shfl_buff = reinterpret_cast<xdlops_group<AccFloat> *>(lds_buff) + wave_id * wave_size;
-
-            for(index_t i = 0; i < shfl_size; i++)
-            {
-                shfl_buff[lane_id] = local_reg_c_groups[i];
-                local_reg_c_groups[i] = shfl_buff[(lane_id + 32) % wave_size];
-            }
-
-            for(index_t i = 0; i < shfl_size; i++)
-            {
-                local_reg_c[i] = local_reg_c_groups[i].data;
-            }
-            //xdlops_group<AccFloat>::merge(&local_reg_c_groups[0], &local_reg_c_groups[num_groups / 2], num_groups / 2);
-        }
-#endif
+        auto shfl_buff = reinterpret_cast<AccFloat*>(lds_buff);
+        blockwise_gemm.GetOutputLayout().OutputShfl(shfl_buff, p_c_thread);
 
         // copy output: register to global memory
         {
@@ -1071,20 +1010,20 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             // N0 = num_threads_per_blks;
             constexpr auto CLayout = blockwise_gemm.GetOutputLayout();
             constexpr index_t M0   = CLayout.M1();
-            constexpr index_t M1   = CLayout.N1();
-            constexpr index_t M2   = CLayout.M0();
+            // constexpr index_t M1   = CLayout.N1();
+            constexpr index_t M2 = CLayout.M0();
 
             constexpr auto c_g_m0_m1_m2_n_global_desc = transform_tensor_descriptor(
                 c_g_m_n_global_desc,
-                make_tuple(PassThrough<G>{}, UnMerge<Sequence<M0, M1, M2>>{}, PassThrough<N>{}),
+                make_tuple(PassThrough<G>{}, PassThrough<M0 * M2>{}, PassThrough<N>{}),
                 make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}),
-                make_tuple(Sequence<0>{}, Sequence<1, 2, 3>{}, Sequence<4>{}));
+                make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}));
 
             //     src descriptor
             constexpr auto c_g_m0_m1_m2_n_thread_desc =
-                make_native_tensor_descriptor_packed(Sequence<1, M0, 1, M2, 1>{});
+                make_native_tensor_descriptor_packed(Sequence<1, M0 * M2, 1>{});
 
-            using CThreadCopySliceLengths = Sequence<1, M0, 1, M2, 1>;
+            using CThreadCopySliceLengths = Sequence<1, M0 * M2, 1>;
 
             constexpr index_t BlkSize = blockwise_gemm.GetBlkSize();
             constexpr index_t NumBlks = blockwise_gemm.GetNumBlks();
@@ -1101,23 +1040,31 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                 const index_t n_thread_data_on_global =
                     n_block_data_on_global + c_thread_mtx_on_block.col;
 
+#if 1
+
                 ThreadwiseGenericTensorSliceCopy_v4r2<decltype(c_g_m0_m1_m2_n_thread_desc),
                                                       decltype(c_g_m0_m1_m2_n_global_desc),
                                                       CThreadCopySliceLengths,
-                                                      arithmetic_sequence_gen<0, 5, 1>::type,
-                                                      4,
+                                                      arithmetic_sequence_gen<0, 3, 1>::type,
+                                                      2,
                                                       1,
                                                       1,
                                                       AddressSpace::Vgpr,
                                                       AddressSpace::Global,
                                                       CGlobalMemoryOp>(
-                    {0, 0, 0, 0, 0},
-                    {g_block_data_on_global,
-                     m_thread_data_on_global / (M2 * M1),
-                     m_thread_data_on_global % (M2 * M1) / M2,
-                     m_thread_data_on_global % M2,
-                     n_thread_data_on_global})
+                    {0, 0, 0},
+                    {g_block_data_on_global, m_thread_data_on_global, n_thread_data_on_global})
                     .Run(p_c_thread + i * BlkSize, p_c_global);
+
+#else
+                if(get_block_1d_id() == 0 && get_thread_local_1d_id() == 0)
+                {
+                    for(index_t i = 0; i < c_k_thread_mtx_desc.GetElementSpace(); i++)
+                    {
+                        p_c_global[i] = p_c_thread[i];
+                    }
+                }
+#endif
             }
         }
     }
