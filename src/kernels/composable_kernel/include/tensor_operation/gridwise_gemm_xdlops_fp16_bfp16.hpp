@@ -991,25 +991,34 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             // N1 = num_blks_per_wave;
             // N0 = num_threads_per_blks;
             constexpr auto CLayout = blockwise_gemm.GetOutputLayout();
+            constexpr index_t M3   = CLayout.M2();
             constexpr index_t M0   = CLayout.M1();
             constexpr index_t M1   = CLayout.N1();
             constexpr index_t M2   = CLayout.M0();
+            constexpr index_t N0   = CLayout.N1();
+            constexpr index_t N1   = CLayout.N0();
 
             constexpr auto c_g_m0_m1_m2_n_global_desc = transform_tensor_descriptor(
                 c_g_m_n_global_desc,
-                make_tuple(
-                    PassThrough<G>{}, UnMerge<Sequence<M / (M1 * M2), M1, M2>>{}, PassThrough<N>{}),
+                make_tuple(PassThrough<G>{},
+                           UnMerge<Sequence<M3, M0, M1, M2>>{},
+                           UnMerge<Sequence<N0, N1>>{}),
                 make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}),
-                make_tuple(Sequence<0>{}, Sequence<1, 2, 3>{}, Sequence<4>{}));
+                make_tuple(Sequence<0>{}, Sequence<1, 3, 4, 5>{}, Sequence<2, 6>{}));
+
+            static_assert(M0 == 4 && M1 == 2 && M2 == 4 && M3 == 2, "");
+            static_assert(N0 == 2 && N1 == 32, "");
+
+            using CThreadCopySliceLengths = Sequence<1, M3, N0, M0, 1, M2, 1>;
 
             //     src descriptor
             constexpr auto c_g_m0_m1_m2_n_thread_desc =
-                make_native_tensor_descriptor_packed(Sequence<1, M0, 1, M2, 1>{});
+                make_native_tensor_descriptor_packed(CThreadCopySliceLengths{});
 
-            using CThreadCopySliceLengths = Sequence<1, M0, 1, M2, 1>;
+            constexpr index_t BlkSize = blockwise_gemm.GetOutputLayout().GetSize();
+            constexpr index_t NumBlks = blockwise_gemm.GetOutputLayout().GetNum();
 
-            constexpr index_t BlkSize = blockwise_gemm.GetBlkSize();
-            constexpr index_t NumBlks = blockwise_gemm.GetNumBlks();
+            static_assert(BlkSize == 64 && NumBlks == 1, "");
 
             for(index_t i = 0; i < NumBlks; ++i)
             {
@@ -1026,19 +1035,21 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                 ThreadwiseGenericTensorSliceCopy_v4r2<decltype(c_g_m0_m1_m2_n_thread_desc),
                                                       decltype(c_g_m0_m1_m2_n_global_desc),
                                                       CThreadCopySliceLengths,
-                                                      arithmetic_sequence_gen<0, 5, 1>::type,
-                                                      4,
+                                                      arithmetic_sequence_gen<0, 7, 1>::type,
+                                                      6,
                                                       1,
                                                       1,
                                                       AddressSpace::Vgpr,
                                                       AddressSpace::Global,
                                                       CGlobalMemoryOp>(
-                    {0, 0, 0, 0, 0},
+                    {0, 0, 0, 0, 0, 0, 0},
                     {g_block_data_on_global,
-                     m_thread_data_on_global / (M2 * M1),
+                     m_thread_data_on_global / (M2 * M1 * M0),
+                     n_thread_data_on_global / N1,
+                     m_thread_data_on_global / (M2 * M1) % M0,
                      m_thread_data_on_global % (M2 * M1) / M2,
                      m_thread_data_on_global % M2,
-                     n_thread_data_on_global})
+                     n_thread_data_on_global % N1})
                     .Run(p_c_thread + i * BlkSize, p_c_global);
             }
         }

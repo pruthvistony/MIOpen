@@ -478,20 +478,33 @@ struct XdlopsGemm_t
         index_t col;
     };
 
-    template <index_t M1_, index_t M0_, index_t N1_, index_t N0_>
     struct OutputLayout
     {
-        __device__ static constexpr index_t M1() { return M1_; }
-        __device__ static constexpr index_t M0() { return M0_; }
-        __device__ static constexpr index_t N1() { return N1_; }
-        __device__ static constexpr index_t N0() { return N0_; }
+        __device__ static constexpr index_t M2() { return GetNumXdlops(); }
+        __device__ static constexpr index_t M1() { return GetMFMAInfo().num_groups_blk; }
+        __device__ static constexpr index_t M0() { return GetMFMAInfo().group_size; }
+        __device__ static constexpr index_t N1()
+        {
+            return IsABroadcast() ? GetMFMAInfo().num_output_blks : 1;
+        }
+        __device__ static constexpr index_t N0() { return GetMFMAInfo().num_threads_blk; }
+
         __device__ static constexpr index_t GetBlkSize() { return GetMFMAInfo().num_regs_blk; }
+
+        __device__ static constexpr index_t GetSize() { return MPerXdlops * NPerXdlops / WaveSize; }
+
+        __device__ static constexpr index_t GetNum() { return MRepeats * NRepeats; }
 
         __device__ static constexpr index_t GetNumBlks()
         {
             return GetNumBlksPerXdlops() * MRepeats * NRepeats;
         }
     };
+
+    __device__ static constexpr index_t GetNumXdlops()
+    {
+        return GetNumBlksPerXdlops() / GetMFMAInfo().num_output_blks;
+    }
 
     __device__ static constexpr index_t GetNumBlksPerXdlops()
     {
@@ -916,8 +929,7 @@ struct XdlopsGemm_t
 
     __device__ static MatrixIndex GetBeginOfThreadBlk(index_t i)
     {
-        const index_t xdlops_i = i / GetNumBlksPerXdlops();
-        const index_t j        = i % GetNumBlksPerXdlops();
+        const index_t xdlops_i = i;
 
         const index_t m_i = xdlops_i / NRepeats;
         const index_t n_i = xdlops_i % NRepeats;
@@ -928,31 +940,21 @@ struct XdlopsGemm_t
         const index_t blk_id = laneId / mfma_type.num_threads_blk;
         const index_t blk_td = laneId % mfma_type.num_threads_blk;
 
-        index_t col_blk = j % mfma_type.num_output_blks;
-        index_t row_blk = j / mfma_type.num_output_blks;
+        // index_t col_blk = 0;
+        // index_t row_blk = j;
 
-        static_if<!IsABroadcast()>{}([&](auto) {
-            col_blk = j / mfma_type.num_output_blks;
-            row_blk = j % mfma_type.num_output_blks;
-        });
+        // static_if<!IsABroadcast()>{}([&](auto) {
+        // col_blk = j;
+        // row_blk = 0;
+        //});
 
-        index_t col = col_blk * mfma_type.n + blk_td + n_i * NPerXdlops;
-        index_t row = row_blk * mfma_type.m + blk_id * mfma_type.group_size + m_i * MPerXdlops;
+        index_t col = blk_td + n_i * NPerXdlops;
+        index_t row = blk_id * mfma_type.group_size + m_i * MPerXdlops;
 
         return MatrixIndex{row, col};
     }
 
-    __device__ static constexpr auto GetOutputLayout()
-    {
-        constexpr auto mfma_type = GetMFMAInfo();
-
-        constexpr auto M1 = mfma_type.num_groups_blk;
-        constexpr auto M0 = mfma_type.group_size;
-        constexpr auto N1 = mfma_type.num_input_blks;
-        constexpr auto N0 = mfma_type.num_threads_blk;
-
-        return OutputLayout<M1, M0, N1, N0>{};
-    }
+    __device__ static constexpr auto GetOutputLayout() { return OutputLayout{}; }
 
     __device__ void SetZeroXdlopsRegs() const {}
 
