@@ -991,7 +991,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             constexpr index_t M3   = CLayout.M3();
             constexpr index_t M4   = CLayout.M2();
             constexpr index_t M0   = CLayout.M1();
-            constexpr index_t M1   = 2;
+            constexpr index_t M1   = CLayout.M5();
             constexpr index_t M2   = CLayout.M0();
 
             constexpr index_t N2 = CLayout.N2();
@@ -1006,7 +1006,18 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                 make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}),
                 make_tuple(Sequence<0>{}, Sequence<1, 4, 5, 6, 7, 8>{}, Sequence<2, 3, 9>{}));
 
-            using CThreadCopySliceLengths = Sequence<1, M5, N2, M3, N0, M4, M0, 1, M2, 1>;
+            using CThreadCopySliceLengths = Sequence<1, M5, N2, N0, M3, M4, M0, 1, M2, 1>;
+
+            // static_assert(M5 == 1, "");
+            // static_assert(M3 == 2, "");
+            // static_assert(M4 == 1, "");
+            // static_assert(M0 == 4, "");
+            // static_assert(M1 == 2, "");
+            // static_assert(M2 == 4, "");
+
+            // static_assert(N2 == 1, "");
+            // static_assert(N0 == 2, "");
+            // static_assert(N1 == 32, "");
 
             //     src descriptor
             constexpr auto c_g_m0_m1_m2_n_thread_desc =
@@ -1034,12 +1045,12 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                                                   CGlobalMemoryOp>(
                 {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
                 {g_block_data_on_global,
-                 m_thread_data_on_global / (M2 * M1 * M0 * M4 * M3),
+                 m_thread_data_on_global / (M3 * M4 * M0 * M1 * M2),
                  n_thread_data_on_global / (N1 * N0),
-                 m_thread_data_on_global / (M2 * M1 * M0 * M4) % M3,
                  n_thread_data_on_global / N1 % N0,
-                 m_thread_data_on_global / (M2 * M1 * M0) % M4,
-                 m_thread_data_on_global / (M2 * M1) % M0,
+                 m_thread_data_on_global / (M4 * M0 * M1 * M2) % M3,
+                 m_thread_data_on_global / (M0 * M1 * M2) % M4,
+                 m_thread_data_on_global / (M1 * M2) % M0,
                  m_thread_data_on_global / M2 % M1,
                  m_thread_data_on_global % M2,
                  n_thread_data_on_global % N1})

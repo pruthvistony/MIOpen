@@ -480,6 +480,8 @@ struct XdlopsGemm_t
 
     struct OutputLayout
     {
+        __device__ static constexpr index_t M5() { return GetMFMAInfo().num_output_blks; }
+
         __device__ static constexpr index_t M4() { return MRepeats; }
 
         __device__ static constexpr index_t M3() { return GetNumXdlops(); }
@@ -501,10 +503,6 @@ struct XdlopsGemm_t
         __device__ static constexpr index_t N0() { return GetMFMAInfo().num_threads_blk; }
 
         __device__ static constexpr index_t GetBlkSize() { return GetMFMAInfo().num_regs_blk; }
-
-        __device__ static constexpr index_t GetSize() { return MPerXdlops * NPerXdlops / WaveSize; }
-
-        __device__ static constexpr index_t GetNum() { return MRepeats * NRepeats; }
 
         __device__ static constexpr index_t GetNumBlks()
         {
