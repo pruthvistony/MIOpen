@@ -43,6 +43,8 @@ struct BlockwiseGemmBlockABlockBThreadCTransANormalBNormalC_xdlops
 
     __device__ constexpr auto GetOutputLayout() const { return XdlopsGemm.GetOutputLayout(); }
 
+    __device__ constexpr auto GetOutputLayout_v2() const { return XdlopsGemm.GetOutputLayout_v2(); }
+
     __device__ constexpr auto GetNumBlks() const
     {
         return XdlopsGemm.GetOutputLayout().GetNumBlks();

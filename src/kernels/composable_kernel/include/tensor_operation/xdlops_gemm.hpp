@@ -478,19 +478,20 @@ struct XdlopsGemm_t
         index_t col;
     };
 
-    struct OutputLayout
+    struct OutputLayout_v2
     {
-        __device__ static constexpr index_t M5() { return GetMFMAInfo().num_output_blks; }
+        __device__ static constexpr index_t M5() { return MRepeats; }
 
-        __device__ static constexpr index_t M4() { return MRepeats; }
+        __device__ static constexpr index_t M4() { return GetNumXdlops(); }
 
-        __device__ static constexpr index_t M3() { return GetNumXdlops(); }
-
-        __device__ static constexpr index_t M2()
+        __device__ static constexpr index_t M3()
         {
             return IsABroadcast() ? 1 : GetMFMAInfo().num_output_blks;
         }
-        __device__ static constexpr index_t M1() { return GetMFMAInfo().num_groups_blk; }
+
+        __device__ static constexpr index_t M2() { return GetMFMAInfo().num_groups_blk; }
+
+        __device__ static constexpr index_t M1() { return GetMFMAInfo().num_input_blks; }
 
         __device__ static constexpr index_t M0() { return GetMFMAInfo().group_size; }
 
@@ -498,8 +499,20 @@ struct XdlopsGemm_t
 
         __device__ static constexpr index_t N1()
         {
-            return IsABroadcast() ? GetMFMAInfo().num_output_blks : 1;
+            return (IsABroadcast() && !(IsKReduction())) ? GetMFMAInfo().num_output_blks : 1;
         }
+
+        __device__ static constexpr index_t N0() { return GetMFMAInfo().num_threads_blk; }
+    };
+
+    // deprecated
+    struct OutputLayout
+    {
+        __device__ static constexpr index_t M1() { return GetMFMAInfo().num_groups_blk; }
+
+        __device__ static constexpr index_t M0() { return GetMFMAInfo().group_size; }
+
+        __device__ static constexpr index_t N1() { return GetMFMAInfo().num_input_blks; }
         __device__ static constexpr index_t N0() { return GetMFMAInfo().num_threads_blk; }
 
         __device__ static constexpr index_t GetBlkSize() { return GetMFMAInfo().num_regs_blk; }
@@ -979,6 +992,8 @@ struct XdlopsGemm_t
     }
 
     __device__ static constexpr auto GetOutputLayout() { return OutputLayout{}; }
+
+    __device__ static constexpr auto GetOutputLayout_v2() { return OutputLayout_v2{}; }
 
     __device__ void SetZeroXdlopsRegs() const {}
 
