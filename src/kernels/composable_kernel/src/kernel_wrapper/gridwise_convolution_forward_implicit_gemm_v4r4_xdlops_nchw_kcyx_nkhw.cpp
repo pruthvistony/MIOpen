@@ -101,33 +101,38 @@ extern "C" __global__
     // B matrix Copy
     constexpr index_t GemmBBlockCopyClusterLengths_GemmK =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_K;
-    constexpr index_t GemmBBlockCopyClusterLengths_GemmN =
+    constexpr index_t GemmBBlockCopyClusterLengths_B =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_N;
     constexpr index_t GemmBBlockCopyClusterLengths_GemmKPack =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_KPACK;
 
     constexpr index_t GemmBBlockCopyThreadSliceLengths_GemmK =
         GemmKPerBlock / GemmBBlockCopyClusterLengths_GemmK;
-    constexpr index_t GemmBBlockCopyThreadSliceLengths_GemmN =
-        GemmNPerBlock / GemmBBlockCopyClusterLengths_GemmN;
+    constexpr index_t GemmBBlockCopyThreadSliceLengths_B =
+        GemmNPerBlock / GemmBBlockCopyClusterLengths_B;
     constexpr index_t GemmBBlockCopyThreadSliceLengths_GemmKPack =
         GemmKPack / GemmBBlockCopyClusterLengths_GemmKPack;
 
-    using GemmBBlockCopyClusterLengths_GemmG_GemmK_GemmN_GemmKPack =
+    using GemmBBlockCopyClusterLengths_GemmG_GemmK_B_N1_GemmKPack =
         Sequence<1,
                  GemmBBlockCopyClusterLengths_GemmK,
-                 GemmBBlockCopyClusterLengths_GemmN,
+                 GemmBBlockCopyClusterLengths_B,
+                 1,
                  GemmBBlockCopyClusterLengths_GemmKPack>;
-    using GemmBBlockCopySubLengths_GemmG_GemmK_GemmN_GemmKPack =
+
+    using GemmBBlockCopySubLengths_GemmG_GemmK_B_N1_GemmKPack =
         Sequence<1,
                  GemmBBlockCopyThreadSliceLengths_GemmK,
-                 GemmBBlockCopyThreadSliceLengths_GemmN,
+                 GemmBBlockCopyThreadSliceLengths_B,
+                 1,
                  GemmBBlockCopyThreadSliceLengths_GemmKPack>;
 
     using GemmBBlockCopyThreadClusterArrangeOrder =
-        Sequence<0, 1, 3, 2>;                                  // [GemmG, GemmK, GemmKPack, GemmN]
-    using GemmBBlockCopySrcAccessOrder = Sequence<0, 1, 3, 2>; // [GemmG, GemmK, GemmKPack, GemmN]
-    using GemmBBlockCopyDstAccessOrder = Sequence<0, 1, 2, 3>; // [GemmG, GemmK, GemmN, GemmKPack]
+        Sequence<0, 1, 4, 2, 3>; // [GemmG, GemmK, GemmKPack, B, N1]
+    using GemmBBlockCopySrcAccessOrder =
+        Sequence<0, 1, 4, 2, 3>; // [GemmG, GemmK, GemmKPack, B, N1]
+    using GemmBBlockCopyDstAccessOrder =
+        Sequence<0, 1, 2, 3, 4>; // [GemmG, GemmK, B, N1, GemmKPack]
 
     constexpr index_t GemmBBlockCopySrcDataPerRead_GemmN =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_SRC_DATA_PER_READ_GEMM_N;
@@ -166,8 +171,8 @@ extern "C" __global__
             GemmABlockCopyDstAccessOrder,
             GemmABlockCopySrcDataPerRead_GemmKPack,
             GemmABlockCopyDstDataPerWrite_GemmKPack,
-            GemmBBlockCopySubLengths_GemmG_GemmK_GemmN_GemmKPack,
-            GemmBBlockCopyClusterLengths_GemmG_GemmK_GemmN_GemmKPack,
+            GemmBBlockCopySubLengths_GemmG_GemmK_B_N1_GemmKPack,
+            GemmBBlockCopyClusterLengths_GemmG_GemmK_B_N1_GemmKPack,
             GemmBBlockCopyThreadClusterArrangeOrder,
             GemmBBlockCopySrcAccessOrder,
             GemmBBlockCopyDstAccessOrder,
