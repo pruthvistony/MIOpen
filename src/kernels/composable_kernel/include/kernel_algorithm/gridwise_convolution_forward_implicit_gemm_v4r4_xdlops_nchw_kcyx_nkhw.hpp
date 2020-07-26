@@ -35,8 +35,8 @@ template <index_t GridSize,
           class GemmABlockCopyDstAccessOrder,
           index_t GemmABlockCopySrcDataPerRead_GemmKPack,
           index_t GemmABlockCopyDstDataPerWrite_GemmKPack,
-          class GemmBBlockCopyThreadSliceLengths_GemmG_GemmK_B_N1_GemmKPack,
-          class GemmBBlockCopyThreadClusterLengths_GemmG_GemmK_B_N1_GemmKPack,
+          class GemmBBlockCopyThreadSliceLengths_GemmG_GemmK_N1_B_GemmKPack,
+          class GemmBBlockCopyThreadClusterLengths_GemmG_GemmK_N1_B_GemmKPack,
           class GemmBBlockCopyThreadClusterArrangeOrder,
           class GemmBBlockCopySrcAccessOrder,
           class GemmBBlockCopyDstAccessOrder,
@@ -76,8 +76,9 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
         constexpr index_t ConvDilationH = ConvDilations{}[0];
         constexpr index_t ConvDilationW = ConvDilations{}[1];
 
-        constexpr index_t N1 = 8;
-        constexpr index_t N0 = N / N1;
+        constexpr index_t N1        = 2;
+        constexpr index_t N0        = N / N1;
+        constexpr index_t BPerBlock = GemmNPerBlock / N1;
 
         constexpr index_t GemmG      = G;
         constexpr index_t GemmM      = KPerGroup;
@@ -89,7 +90,7 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
 
         constexpr index_t GemmK = GemmKTotal / GemmKPack;
 
-        static_assert(GemmM % GemmMPerBlock == 0 && B % GemmNPerBlock == 0 &&
+        static_assert(GemmM % GemmMPerBlock == 0 && B % BPerBlock == 0 &&
                           GemmK % GemmKPerBlock == 0,
                       "wrong! cannot divide work evenly among block");
 
@@ -132,21 +133,21 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
                        Sequence<4, 5>{},
                        Sequence<6, 7>{}));
 
-        constexpr auto in_gemmg_gemmktotal_gemmn_n1_global_desc = transform_tensor_descriptor(
+        constexpr auto in_gemmg_gemmktotal_n1_b_global_desc = transform_tensor_descriptor(
             in_g_n1_n0_cpergroup_y_ho_x_wo_global_desc,
             make_tuple(PassThrough<G>{},
                        Merge<Sequence<C, Y, X>>{},
-                       Merge<Sequence<N0, Ho, Wo>>{},
-                       PassThrough<N1>{}),
-            make_tuple(Sequence<0>{}, Sequence<3, 4, 6>{}, Sequence<2, 5, 7>{}, Sequence<1>{}),
+                       PassThrough<N1>{},
+                       Merge<Sequence<N0, Ho, Wo>>{}),
+            make_tuple(Sequence<0>{}, Sequence<3, 4, 6>{}, Sequence<1>{}, Sequence<2, 5, 7>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}));
 
-        constexpr auto in_gemmg_gemmk_gemmn_n1_gemmkpack_global_desc = transform_tensor_descriptor(
-            in_gemmg_gemmktotal_gemmn_n1_global_desc,
+        constexpr auto in_gemmg_gemmk_n1_b_gemmkpack_global_desc = transform_tensor_descriptor(
+            in_gemmg_gemmktotal_n1_b_global_desc,
             make_tuple(PassThrough<GemmG>{},
                        UnMerge<Sequence<GemmK, GemmKPack>>{},
-                       PassThrough<B>{},
-                       PassThrough<N1>{}),
+                       PassThrough<N1>{},
+                       PassThrough<B>{}),
             make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}, Sequence<3>{}),
             make_tuple(Sequence<0>{}, Sequence<1, 4>{}, Sequence<2>{}, Sequence<3>{}));
 
@@ -177,7 +178,7 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
             AccFloat,
             CFloat,
             decltype(wei_gemmg_gemmk_gemmm_gemmkpack_global_desc),
-            decltype(in_gemmg_gemmk_gemmn_n1_gemmkpack_global_desc),
+            decltype(in_gemmg_gemmk_n1_b_gemmkpack_global_desc),
             decltype(out_gemmg_gemmm_gemmn_global_desc),
             GemmMPerBlock,
             GemmNPerBlock,
@@ -192,8 +193,8 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
             3, // src vector read dimension of A matrix is GemmKPack
             GemmABlockCopySrcDataPerRead_GemmKPack,
             GemmABlockCopyDstDataPerWrite_GemmKPack,
-            GemmBBlockCopyThreadSliceLengths_GemmG_GemmK_B_N1_GemmKPack,
-            GemmBBlockCopyThreadClusterLengths_GemmG_GemmK_B_N1_GemmKPack,
+            GemmBBlockCopyThreadSliceLengths_GemmG_GemmK_N1_B_GemmKPack,
+            GemmBBlockCopyThreadClusterLengths_GemmG_GemmK_N1_B_GemmKPack,
             GemmBBlockCopyThreadClusterArrangeOrder,
             GemmBBlockCopySrcAccessOrder,
             GemmBBlockCopyDstAccessOrder,
