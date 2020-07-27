@@ -835,6 +835,9 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         const index_t n_block_data_on_global = (WorkgroupSchdOrder == MBlock1NBlock0)
                                                    ? (block_work_id[2] * NPerBlock)
                                                    : (block_work_id[1] * NPerBlock);
+        const index_t b_block_data_on_global = (WorkgroupSchdOrder == MBlock1NBlock0)
+                                                   ? (block_work_id[2] * BPerBlock)
+                                                   : (block_work_id[1] * BPerBlock);
 
         //   LDS mem
         constexpr index_t max_align = KPack;
@@ -865,7 +868,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                                         {0, 0, 0, 0});
 
         constexpr auto b_g_k_n1_b_kpack_block_desc = make_native_tensor_descriptor_aligned(
-            Sequence<1, KPerBlock, 1, NPerBlock, KPack>{}, Number<max_align>{});
+            Sequence<1, KPerBlock, N1, BPerBlock, KPack>{}, Number<max_align>{});
 
         // input blockwise copy
         auto b_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
@@ -885,7 +888,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             AddressSpace::Global,
             AddressSpace::Vgpr,
             AddressSpace::Lds,
-            InMemoryDataOperation::Set>({g_block_data_on_global, 0, 0, n_block_data_on_global, 0},
+            InMemoryDataOperation::Set>({g_block_data_on_global, 0, 0, b_block_data_on_global, 0},
                                         {0, 0, 0, 0, 0});
 
         // GEMM definition
@@ -986,6 +989,12 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
 
         // load data from xldop_acc_regs
         blockwise_gemm.XdlopsMatrixCRead(p_c_thread);
+
+        //for(int i = 0; i < c_k_thread_mtx_desc.GetElementSpace(); i++)
+        //{
+            //// p_c_thread[i] = get_thread_local_1d_id() / 64;
+            //p_c_thread[i] = get_thread_local_1d_id() * 100 + p_b_block[get_thread_local_1d_id()];
+        //}
 
         // copy output: register to global memory
         {

@@ -27,6 +27,7 @@ template <index_t GridSize,
           index_t GemmKPerBlock,
           index_t GemmMPerWave,
           index_t GemmNPerWave,
+          index_t NRepeats,
           index_t GemmKPack,
           class GemmABlockCopyThreadSliceLengths_GemmG_GemmK_GemmM_GemmKPack,
           class GemmABlockCopyThreadClusterLengths_GemmG_GemmK_GemmM_GemmKPack,
@@ -76,7 +77,7 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
         constexpr index_t ConvDilationH = ConvDilations{}[0];
         constexpr index_t ConvDilationW = ConvDilations{}[1];
 
-        constexpr index_t N1        = 2;
+        constexpr index_t N1        = NRepeats;
         constexpr index_t N0        = N / N1;
         constexpr index_t BPerBlock = GemmNPerBlock / N1;
 
@@ -198,7 +199,7 @@ struct GridwiseConvolutionForwardImplicitGemm_v4r4_xdlops_nchw_kcyx_nkhw
             GemmBBlockCopyThreadClusterArrangeOrder,
             GemmBBlockCopySrcAccessOrder,
             GemmBBlockCopyDstAccessOrder,
-            2, // Src vetor read diemsnion of B matrix is GemmN
+            3, // Src vetor read diemsnion of B matrix is B
             GemmBBlockCopySrcDataPerRead_B,
             GemmBBlockCopyDstDataPerWrite_GemmKPack,
             InMemoryDataOperation::Set,

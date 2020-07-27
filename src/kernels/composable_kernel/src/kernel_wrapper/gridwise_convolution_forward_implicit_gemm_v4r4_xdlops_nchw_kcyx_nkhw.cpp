@@ -98,25 +98,28 @@ extern "C" __global__
     constexpr index_t GemmABlockCopyDstDataPerWrite_GemmKPack =
         CK_PARAM_DEPENDENT_GEMM_A_BLOCK_COPY_DST_DATA_PER_WRITE_GEMM_KPACK;
 
+    constexpr index_t NRepeats  = 2;
+    constexpr index_t BPerBlock = GemmNPerBlock / NRepeats;
+
     // B matrix Copy
     constexpr index_t GemmBBlockCopyClusterLengths_GemmK =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_K;
     constexpr index_t GemmBBlockCopyClusterLengths_B =
-        CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_N;
+        CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_N / NRepeats;
     constexpr index_t GemmBBlockCopyClusterLengths_GemmKPack =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_KPACK;
 
     constexpr index_t GemmBBlockCopyThreadSliceLengths_GemmK =
         GemmKPerBlock / GemmBBlockCopyClusterLengths_GemmK;
     constexpr index_t GemmBBlockCopyThreadSliceLengths_B =
-        GemmNPerBlock / GemmBBlockCopyClusterLengths_B;
+        BPerBlock / GemmBBlockCopyClusterLengths_B;
     constexpr index_t GemmBBlockCopyThreadSliceLengths_GemmKPack =
         GemmKPack / GemmBBlockCopyClusterLengths_GemmKPack;
 
     using GemmBBlockCopyClusterLengths_GemmG_GemmK_N1_B_GemmKPack =
         Sequence<1,
                  GemmBBlockCopyClusterLengths_GemmK,
-                 1,
+                 NRepeats,
                  GemmBBlockCopyClusterLengths_B,
                  GemmBBlockCopyClusterLengths_GemmKPack>;
 
@@ -163,6 +166,7 @@ extern "C" __global__
             GemmKPerBlock,
             GemmMPerWave,
             GemmNPerWave,
+            NRepeats,
             GemmKPack,
             GemmABlockCopySubLengths_GemmG_GemmK_GemmM_GemmKPack,
             GemmABlockCopyClusterLengths_GemmG_GemmK_GemmM_GemmKPack,
