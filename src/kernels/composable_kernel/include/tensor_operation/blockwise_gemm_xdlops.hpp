@@ -127,6 +127,15 @@ struct BlockwiseGemmBlockABlockBThreadCTransANormalBNormalC_xdlops
     __device__ void XdlopsMatrixCSetZero() const { XdlopsGemm.SetZeroXdlopsRegs(); }
 
     template <class FloatC>
+    __device__ void XdlopsMatrixCSetZero(FloatC* __restrict__ p_c_thread) const
+    {
+        constexpr index_t c_thread_size = GemmMPerWave * GemmNPerWave / WaveSize;
+        for(index_t i     = 0; i < c_thread_size; ++i)
+            p_c_thread[i] = FloatC(0);
+        XdlopsGemm.SetZeroXdlopsRegs();
+    }
+
+    template <class FloatC>
     __device__ void XdlopsMatrixCRead(FloatC* __restrict__ p_c_thread) const
     {
         XdlopsGemm.ReadXdlopsRegs(p_c_thread);

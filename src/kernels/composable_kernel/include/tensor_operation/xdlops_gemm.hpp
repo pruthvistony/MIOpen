@@ -776,16 +776,14 @@ struct XdlopsGemm_t
 
     __device__ static constexpr auto GetOutputLayout() { return OutputLayout{}; }
 
-    __device__ static constexpr index_t GetNumXdlops()
-    {
-        return GetNumBlksPerXdlops() / mfma_type.num_output_blks;
-    }
-
     struct OutputLayout_v2
     {
         __device__ static constexpr index_t M5() { return MRepeats; }
 
-        __device__ static constexpr index_t M4() { return GetNumXdlops(); }
+        __device__ static constexpr index_t M4()
+        {
+            return GetNumBlksPerXdlops() / mfma_type.num_output_blks;
+        }
 
         __device__ static constexpr index_t M3()
         {
@@ -806,6 +804,13 @@ struct XdlopsGemm_t
         }
 
         __device__ static constexpr index_t N0() { return mfma_type.num_threads_blk; }
+
+        __device__ static constexpr auto GetOutputThreadDesc()
+        {
+            return make_native_tensor_descriptor(
+                Sequence<1, M5(), N2(), M4(), N1(), M3(), M2(), 1, M0(), 1>{},
+                Sequence<1, M5(), N2(), M4(), N1(), M3(), M2(), M1(), M0(), N0()>{});
+        }
     };
 
     __device__ static constexpr auto GetOutputLayout_v2() { return OutputLayout_v2{}; }

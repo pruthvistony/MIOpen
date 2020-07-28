@@ -914,7 +914,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             1,
             1>{};
 
-        constexpr auto c_k_thread_mtx_desc = blockwise_gemm.GetThreadMatrixCDescriptor();
+        constexpr auto c_thread_desc = blockwise_gemm.GetOutputLayout_v2().GetOutputThreadDesc();
 
         constexpr index_t a_block_space =
             math::integer_least_multiple(a_g_k_m_kpack_block_desc.GetElementSpace(), max_align);
@@ -926,11 +926,10 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         __shared__ ABFloat p_b_block[b_block_space];
 
         // register allocation for output
-        AccFloat p_c_thread[c_k_thread_mtx_desc.GetElementSpace()];
+        AccFloat p_c_thread[c_thread_desc.GetElementSize()];
 
         // zero out threadwise output
-        threadwise_matrix_set_zero(c_k_thread_mtx_desc, p_c_thread);
-        blockwise_gemm.XdlopsMatrixCSetZero();
+        blockwise_gemm.XdlopsMatrixCSetZero(p_c_thread);
 
         // preload data into LDS
         {
@@ -1021,11 +1020,9 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                 make_tuple(Sequence<0>{}, Sequence<1>{}, Sequence<2>{}),
                 make_tuple(Sequence<0>{}, Sequence<1, 3, 5, 6, 7, 8>{}, Sequence<2, 4, 9>{}));
 
-            using CThreadCopySliceLengths = Sequence<1, M_5, N_2, M_4, N_1, M_3, M_2, 1, M_0, 1>;
-
             //     src descriptor
             constexpr auto c_g_m5_n2_m4_n1_m3_m2_m1_m0_n0_thread_desc =
-                make_native_tensor_descriptor_packed(CThreadCopySliceLengths{});
+                make_native_tensor_descriptor_packed(c_thread_desc.GetLengths());
 
             // calculate origin of thread output tensor on global memory
             //     blockwise GEMM c matrix starting index
@@ -1040,7 +1037,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             ThreadwiseGenericTensorSliceCopy_v4r2<
                 decltype(c_g_m5_n2_m4_n1_m3_m2_m1_m0_n0_thread_desc),
                 decltype(c_g_m5_n2_m4_n1_m3_m2_m1_m0_n0_global_desc),
-                CThreadCopySliceLengths,
+                decltype(c_thread_desc.GetLengths()),
                 arithmetic_sequence_gen<0, 10, 1>::type,
                 9,
                 1,
