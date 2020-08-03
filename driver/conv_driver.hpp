@@ -1172,7 +1172,7 @@ int ConvDriver<Tgpu, Tref>::AllocateBuffersAndCopy()
             for(int i = 0; i < in_sz; i++)
             {
                 if(is_fwd || is_wrw)
-                    in.data[i] = i % 7;
+                    in.data[i] = rand() % 7;
                 // Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
                 else /// \ref move_rand
                     rand();
@@ -1219,7 +1219,7 @@ int ConvDriver<Tgpu, Tref>::AllocateBuffersAndCopy()
             for(int i = 0; i < wei_sz; i++)
                 if(is_fwd || is_bwd)
                     // wei.data[i] = Data_scale * detail::RanGenWeights<Tgpu>();
-                    wei.data[i] = 1;
+                    wei.data[i] = rand() % 5;
                 else /// \ref move_rand
                     rand();
         }
@@ -2937,14 +2937,14 @@ int ConvDriver<Tgpu, Tref>::VerifyForward()
         if(!TryReadVerificationCache(Direction::Fwd, outputTensor, outhost.data.data()))
             RunForwardCPU();
 
-    for(int i = 0; i < outhost.data.size(); i++)
-    {
-        if(abs(outhost.data.data()[i] - out.data.data()[i]) > 0)
-            std::cout << ">>> ";
+    // for(int i = 0; i < outhost.data.size(); i++)
+    //{
+    // if(abs(outhost.data.data()[i] - out.data.data()[i]) > 0)
+    // std::cout << ">>> ";
 
-        std::cout << i << " CPU = " << outhost.data.data()[i] << " GPU = " << out.data.data()[i]
-                  << std::endl;
-    }
+    // std::cout << i << " CPU = " << outhost.data.data()[i] << " GPU = " << out.data.data()[i]
+    //<< std::endl;
+    //}
 
     const auto isInt8 = (data_type == miopenInt8 || data_type == miopenInt8x4);
     auto error        = is_fwd_run_failed ? std::numeric_limits<double>::max()

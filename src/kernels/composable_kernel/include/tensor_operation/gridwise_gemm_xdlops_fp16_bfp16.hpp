@@ -806,11 +806,11 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         constexpr auto N = c_g_m_n_global_desc.GetLengths()[2];
 
         constexpr auto K     = b_g_k_n1_b_kpack_global_desc.GetLengths()[1];
-        constexpr auto N1    = b_g_k_n1_b_kpack_global_desc.GetLengths()[2];
+        constexpr auto in_N1 = b_g_k_n1_b_kpack_global_desc.GetLengths()[2];
         constexpr auto B     = b_g_k_n1_b_kpack_global_desc.GetLengths()[3];
         constexpr auto KPack = b_g_k_n1_b_kpack_global_desc.GetLengths()[4];
 
-        constexpr index_t BPerBlock = NPerBlock / N1;
+        constexpr index_t BPerBlock = NPerBlock / in_N1;
 
         // divide block work by [M, N]
         static_assert(M % MPerBlock == 0 && B % BPerBlock == 0 && K % KPerBlock == 0,
@@ -832,9 +832,6 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         const index_t m_block_data_on_global = (WorkgroupSchdOrder == MBlock1NBlock0)
                                                    ? (block_work_id[1] * MPerBlock)
                                                    : (block_work_id[2] * MPerBlock);
-        const index_t n_block_data_on_global = (WorkgroupSchdOrder == MBlock1NBlock0)
-                                                   ? (block_work_id[2] * NPerBlock)
-                                                   : (block_work_id[1] * NPerBlock);
         const index_t b_block_data_on_global = (WorkgroupSchdOrder == MBlock1NBlock0)
                                                    ? (block_work_id[2] * BPerBlock)
                                                    : (block_work_id[1] * BPerBlock);
@@ -868,7 +865,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
                                         {0, 0, 0, 0});
 
         constexpr auto b_g_k_n1_b_kpack_block_desc = make_native_tensor_descriptor_aligned(
-            Sequence<1, KPerBlock, N1, BPerBlock, KPack>{}, Number<max_align>{});
+            Sequence<1, KPerBlock, in_N1, BPerBlock, KPack>{}, Number<max_align>{});
 
         // input blockwise copy
         auto b_blockwise_copy = BlockwiseGenericTensorSliceCopy_v4<
@@ -989,10 +986,10 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
         // load data from xldop_acc_regs
         blockwise_gemm.XdlopsMatrixCRead(p_c_thread);
 
-        //for(int i = 0; i < c_k_thread_mtx_desc.GetElementSpace(); i++)
+        // for(int i = 0; i < c_k_thread_mtx_desc.GetElementSpace(); i++)
         //{
-            //// p_c_thread[i] = get_thread_local_1d_id() / 64;
-            //p_c_thread[i] = get_thread_local_1d_id() * 100 + p_b_block[get_thread_local_1d_id()];
+        //// p_c_thread[i] = get_thread_local_1d_id() / 64;
+        // p_c_thread[i] = get_thread_local_1d_id() * 100 + p_b_block[get_thread_local_1d_id()];
         //}
 
         // copy output: register to global memory
@@ -1031,8 +1028,10 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             const index_t m_thread_data_on_global =
                 m_block_data_on_global + c_thread_mtx_on_block.row;
 
+            const auto wave_id = get_thread_local_1d_id() / 64;
+
             const index_t n_thread_data_on_global =
-                n_block_data_on_global + c_thread_mtx_on_block.col;
+                b_block_data_on_global + c_thread_mtx_on_block.col + (wave_id % in_N1) * B;
 
             ThreadwiseGenericTensorSliceCopy_v4r2<
                 decltype(c_g_m5_n2_m4_n1_m3_m2_m1_m0_n0_thread_desc),

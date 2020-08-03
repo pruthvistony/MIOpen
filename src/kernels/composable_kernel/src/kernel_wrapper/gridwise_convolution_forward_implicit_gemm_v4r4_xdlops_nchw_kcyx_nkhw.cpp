@@ -98,14 +98,14 @@ extern "C" __global__
     constexpr index_t GemmABlockCopyDstDataPerWrite_GemmKPack =
         CK_PARAM_DEPENDENT_GEMM_A_BLOCK_COPY_DST_DATA_PER_WRITE_GEMM_KPACK;
 
-    constexpr index_t NRepeats  = 2;
-    constexpr index_t BPerBlock = GemmNPerBlock / NRepeats;
+    constexpr index_t NWaves    = GemmNPerBlock / GemmNPerWave;
+    constexpr index_t BPerBlock = GemmNPerBlock / NWaves;
 
     // B matrix Copy
     constexpr index_t GemmBBlockCopyClusterLengths_GemmK =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_K;
     constexpr index_t GemmBBlockCopyClusterLengths_B =
-        CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_N / NRepeats;
+        CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_N / NWaves;
     constexpr index_t GemmBBlockCopyClusterLengths_GemmKPack =
         CK_PARAM_DEPENDENT_GEMM_B_BLOCK_COPY_CLUSTER_LENGTHS_GEMM_KPACK;
 
@@ -119,7 +119,7 @@ extern "C" __global__
     using GemmBBlockCopyClusterLengths_GemmG_GemmK_N1_B_GemmKPack =
         Sequence<1,
                  GemmBBlockCopyClusterLengths_GemmK,
-                 NRepeats,
+                 NWaves,
                  GemmBBlockCopyClusterLengths_B,
                  GemmBBlockCopyClusterLengths_GemmKPack>;
 
@@ -166,7 +166,7 @@ extern "C" __global__
             GemmKPerBlock,
             GemmMPerWave,
             GemmNPerWave,
-            NRepeats,
+            NWaves,
             GemmKPack,
             GemmABlockCopySubLengths_GemmG_GemmK_GemmM_GemmKPack,
             GemmABlockCopyClusterLengths_GemmG_GemmK_GemmM_GemmKPack,

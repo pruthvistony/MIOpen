@@ -98,8 +98,7 @@ struct BlockwiseGemmBlockABlockBThreadCTransANormalBNormalC_xdlops
 
         const auto thread_mtx_on_blk = XdlopsGemm.GetBeginOfThreadXdlops();
 
-        const index_t col = (waveId % GemmNWaves) * GemmNPerWave + thread_mtx_on_blk.col;
-
+        const index_t col = thread_mtx_on_blk.col;
         const index_t row = (waveId / GemmNWaves) * GemmMPerWave + thread_mtx_on_blk.row;
 
         return MatrixIndex{row, col};
