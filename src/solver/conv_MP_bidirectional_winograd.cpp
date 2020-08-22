@@ -689,6 +689,7 @@ GetTransformedConvContext(const ConvolutionContext& ctx) const
 
     ConvolutionContext transformed_ctx(in, wei, out, conv_desc, dir, 0);
     transformed_ctx.ExecutionContext::operator=(ExecutionContext(ctx));
+    transformed_ctx.SetupFloats();
 
     return transformed_ctx;
 }
