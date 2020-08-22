@@ -736,7 +736,7 @@ ConvSolution ConvMPBidirectWinograd_xdlops<WinoDataH, WinoFilterH, WinoDataW, Wi
         int gemm_n       = -1;
         int gemm_k_total = -1;
 
-        std::tie(gemm_g, gemm_m, gemm_n, gemm_k_total) = ConvHipImplicitGemmForwardV4R4Xdlops::CalculateGemmSize(ctx);
+        std::tie(gemm_g, gemm_m, gemm_n, gemm_k_total) = ConvHipImplicitGemmForwardV4R4Xdlops::CalculateGemmSize(xdlops_conv_ctx);
         MIOPEN_LOG_I2(" gemm_g=" << gemm_g << " gemm_m=" << gemm_m << " gemm_n=" << gemm_n << " gemm_k_total=" << gemm_k_total);
     }
     ConvSolution xdlops_conv 
