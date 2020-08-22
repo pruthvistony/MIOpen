@@ -150,9 +150,9 @@ pipeline {
     stages{
         // Run all static analysis tests
 
-        stage("Kamil's custom stages"){
+        stage("Kamil's custom stages Forward"){
             parallel{
-                stage('Forward') {
+                stage('Forward clang') {
                     agent{ label rocmnode("gfx908") }
                     environment{
                         cmd = """
@@ -162,26 +162,23 @@ pipeline {
                             cd build
                             CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
                             make -j\$(nproc)
-                            MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0 MIOPEN_LOG_LEVEL=6 ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
-                        """
 
-                    }
-                    steps{
-                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "", image+'-hip-clang', "/usr/local", cmd)
-                    }
-                }
+                            export MIOPEN_FIND_MODE=NORMAL;
+                            export MIOPEN_DEBUG_CONV_IMPLICIT_GEMM_XDLOPS=1 ;
+                            export MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0;
+                            export MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0
+                                                        
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=0
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=0
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=0
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=0
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
 
-                stage('Backwards') {
-                    agent{ label rocmnode("gfx908") }
-                    environment{
-                        cmd = """
-                            ulimit -c unlimited
-                            rm -rf build
-                            mkdir build
-                            cd build
-                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
-                            make -j\$(nproc) 
-                            MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0 MIOPEN_LOG_LEVEL=6 ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 2 -V 1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=1
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
                         """
 
                     }
@@ -191,6 +188,86 @@ pipeline {
                 }
             }
         }
+
+        stage("Kamil's custom stages Forward hcc"){
+            parallel{
+                stage('Forward hcc') {
+                    agent{ label rocmnode("gfx908") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/bin/hcc CXXFLAGS='-Werror' cmake -DCMAKE_PREFIX_PATH=/opt/rocm/bin/hcc -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
+                            make -j\$(nproc)
+
+                            export MIOPEN_FIND_MODE=NORMAL;
+                            export MIOPEN_DEBUG_CONV_IMPLICIT_GEMM_XDLOPS=1 ;
+                            export MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0;
+                            export MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0
+                                                        
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=0
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=0
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=0
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=0
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
+
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=1
+                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=1
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
+                        """
+
+                    }
+                    steps{
+                        buildJob('hcc', '', "", image + "rocm", "/usr/local", cmd)
+                    }
+                }
+            }
+        }
+
+        //stage("Kamil's custom stages Backwards"){
+        //    parallel{
+        //        stage('Backwards clang') {
+        //            agent{ label rocmnode("gfx908") }
+        //            environment{
+        //                cmd = """
+        //                    ulimit -c unlimited
+        //                    rm -rf build
+        //                    mkdir build
+        //                    cd build
+        //                    CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
+        //                    make -j\$(nproc) 
+        //                    MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0 MIOPEN_LOG_LEVEL=6 ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 2 -V 1
+        //                """
+        //
+        //            }
+        //            steps{
+        //                buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "", image+'-hip-clang', "/usr/local", cmd)
+        //            }
+        //        }
+        //        stage('Backwards hcc') {
+        //            agent{ label rocmnode("gfx908") }
+        //            environment{
+        //                cmd = """
+        //                    ulimit -c unlimited
+        //                    rm -rf build
+        //                    mkdir build
+        //                    cd build
+        //                    CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
+        //                    make -j\$(nproc) 
+        //                    MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0 MIOPEN_LOG_LEVEL=6 ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 2 -V 1
+        //                """
+        //
+        //            }
+        //            steps{
+        //                buildJob('hcc', '', "", image + "rocm", "/usr/local", cmd)
+        //            }
+        //        }
+        //    }
+        //}
     }    
 }
 
