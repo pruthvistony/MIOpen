@@ -40,6 +40,13 @@ union c_vec32_2_t
         float32_t x;
         float32_t y;
     } s;
+    struct
+    {
+        float16_t x;
+        float16_t y;
+        float16_t z;
+        float16_t w;
+    } m;
     float n[64];
 };
 

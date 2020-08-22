@@ -1008,7 +1008,7 @@ struct GridwiseBatchGemmXdlops_gkmkpack_gknkpack_gmn_v2
             constexpr index_t BlkSize = blockwise_gemm.GetBlkSize();
             constexpr index_t NumBlks = blockwise_gemm.GetNumBlks();
 
-            static_assert(BlkSize == 16, "");
+// static_assert(BlkSize == 16, "");
 
 #pragma unroll
             for(index_t i = 0; i < NumBlks; ++i)

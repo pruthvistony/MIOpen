@@ -308,5 +308,17 @@ __device__ FloatC intrin_mfma_f32_32x32x2bf16_v2(const ushort2_t* reg_a,
     reg_c.s.y = llvm_intrin_amdgcn_mfma_f32_32x32x2bf16(reg_a[0], reg_b[0], reg_c.s.y, 1, 1, 0);
     return reg_c;
 }
+
+template <class FloatC>
+__device__ FloatC intrin_mfma_f32_16x16x4f16_v2(const half4_t* reg_a,
+                                                const half4_t* reg_b,
+                                                FloatC reg_c)
+{
+    reg_c.m.x = llvm_intrin_amdgcn_mfma_f32_16x16x4f16(reg_a[0], reg_b[0], reg_c.m.x, 2, 0, 0);
+    reg_c.m.y = llvm_intrin_amdgcn_mfma_f32_16x16x4f16(reg_a[0], reg_b[0], reg_c.m.y, 2, 1, 0);
+    reg_c.m.z = llvm_intrin_amdgcn_mfma_f32_16x16x4f16(reg_a[0], reg_b[0], reg_c.m.z, 2, 2, 0);
+    reg_c.m.w = llvm_intrin_amdgcn_mfma_f32_16x16x4f16(reg_a[0], reg_b[0], reg_c.m.w, 2, 3, 0);
+    return reg_c;
+}
 }
 #endif
