@@ -166,63 +166,121 @@ pipeline {
                             export MIOPEN_FIND_MODE=NORMAL;
                             export MIOPEN_DEBUG_CONV_IMPLICIT_GEMM_XDLOPS=1 ;
                             export MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0;
-                            export MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0
-                                                        
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=0
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=0
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=0
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=0
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
+                            MIOPEN_LOG_LEVEL=3
 
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=1
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=1
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=1
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=1
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
+                            //MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=72
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                               ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
+                                 ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            //MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=73
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                               ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
+                                 ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            //MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=74
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                               ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
+                                 ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            //MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=75
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                               ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
+                                 ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
+
                         """
 
                     }
                     steps{
                         buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "", image+'-hip-clang', "/usr/local", cmd)
-                    }
-                }
-            }
-        }
-
-        stage("Kamil's custom stages Forward hcc"){
-            parallel{
-                stage('Forward hcc') {
-                    agent{ label rocmnode("gfx908") }
-                    environment{
-                        cmd = """
-                            ulimit -c unlimited
-                            rm -rf build
-                            mkdir build
-                            cd build
-                            CXX=/opt/rocm/bin/hcc CXXFLAGS='-Werror' cmake -DCMAKE_PREFIX_PATH=/opt/rocm/bin/hcc -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
-                            make -j\$(nproc)
-
-                            export MIOPEN_FIND_MODE=NORMAL;
-                            export MIOPEN_DEBUG_CONV_IMPLICIT_GEMM_XDLOPS=1 ;
-                            export MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0;
-                            export MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0
-                                                        
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=0
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=0
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=0
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=0
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
-
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F3X3=1
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F4X3=1
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F5X3=1
-                            export MIOPEN_DEBUG_AMD_MP_BD_XDLOPS_WINOGRAD_F6X3=1
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 1 -V 1
-                        """
-
-                    }
-                    steps{
-                        buildJob('hcc', '', "", image + "rocm", "/usr/local", cmd)
                     }
                 }
             }
