@@ -167,8 +167,20 @@ pipeline {
                             export MIOPEN_DEBUG_CONV_IMPLICIT_GEMM_XDLOPS=1 ;
                             export MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0;
                             export MIOPEN_LOG_LEVEL=3;
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=64;
+                            ./bin/MIOpenDriver   conv -x 1 -y 1 -W 25 -H 25 -c 1600 -n 32 -k 1600 -g 25 -p 0 -q 0 -time 1 -F 1 -V 1;
                             export MIOPEN_DEBUG_FIND_ONLY_SOLVER=72;
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;                            
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=64;
+                            ./bin/MIOpenDriver   conv -x 1 -y 1 -W 19 -H 19 -c 2304 -n 32 -k 2304 -g 36 -p 0 -q 0 -time 1 -F 1 -V 1;
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=73;
                             ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=64;
+                            ./bin/MIOpenDriver   conv -x 1 -y 1 -W 15 -H 15 -c 3136 -n 32 -k 3136 -g 49 -p 0 -q 0 -time 1 -F 1 -V 1;
+                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=74;
+                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+
+
                             ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
                             ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
                             ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
