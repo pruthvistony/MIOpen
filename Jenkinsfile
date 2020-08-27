@@ -149,10 +149,321 @@ pipeline {
     }
     stages{
         // Run all static analysis tests
-
-        stage("Kamil's custom stages Forward"){
+        stage("Static checks"){
             parallel{
-                stage('Forward clang') {
+                stage('Clang Tidy') {
+                    agent{  label rocmnode("rocmtest") }
+                    environment{
+                        cmd = "rm -rf build; mkdir build; cd build; CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
+                    }
+                    steps{
+                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
+                    }
+                }
+
+                stage('Clang Format') {
+                    agent{ label rocmnode("rocmtest") }
+                    environment{
+                        cmd = "find . -iname \'*.h\' \
+                                -o -iname \'*.hpp\' \
+                                -o -iname \'*.cpp\' \
+                                -o -iname \'*.h.in\' \
+                                -o -iname \'*.hpp.in\' \
+                                -o -iname \'*.cpp.in\' \
+                                -o -iname \'*.cl\' \
+                                | grep -v 'build/' \
+                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
+                    }
+                    steps{
+                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
+                    }
+                }
+
+                stage('Hip Tidy') {
+                    agent{ label rocmnode("rocmtest") }
+                    environment{
+                        cmd = "rm -rf build; mkdir build; cd build; CXX=/usr/local/bin/hcc cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
+                    }
+                    steps{
+                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
+                    }
+                }
+            }
+        }
+        
+        // Run quick fp32 tests
+        stage("Fast full precision"){
+            parallel{
+               stage('Clang Debug') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('clang++-3.8', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image, "")
+                    }
+                }
+
+                stage('Clang Release') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('clang++-3.8', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+
+                stage('GCC Debug') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('g++-5', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image, "")
+                    }
+                }
+
+                stage('GCC Release') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('g++-5', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+
+                stage('Fiji GCC Debug') {
+                    agent{ label rocmnode("fiji") }
+                    steps{
+                        buildJob('g++-5', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image, "")
+                    }
+                }
+
+                stage('Hip Release') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('hcc', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image + "rocm")
+                    }
+                }
+
+                stage('Hip clang debug') {
+                    agent{ label rocmnode("vega") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache .. 
+                            CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
+
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "", image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+
+
+
+                stage('gfx908 Hip debug') {
+                    agent{ label rocmnode("gfx908") }
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_GFX908=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image + "rocm")
+                    }
+                }
+            }
+        }
+
+        // Misc tests
+        stage("Aux tests"){
+            parallel{
+                stage('Hip clang debug COMGR') {
+                    // WORKAROUND for COMGR Vega10 testing problem. Should be "vega".
+                    agent{ label rocmnode("vega20") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DMIOPEN_USE_COMGR=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache .. 
+                            CTEST_PARALLEL_LEVEL=2 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
+
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "MIOPEN_LOG_LEVEL=5 MIOPEN_COMPILE_PARALLEL_LEVEL=1",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+                stage('Hip clang Embed Build') {
+                    agent{ label rocmnode("vega20") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DMIOPEN_EMBED_DB="gfx906_60;gfx906_64" -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache .. 
+                            make -j\$(nproc) check
+                        """
+
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "MIOPEN_LOG_LEVEL=5 MIOPEN_COMPILE_PARALLEL_LEVEL=1",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+
+                stage('Hip Static Release') {
+                    agent{ label rocmnode("vega") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DBUILD_SHARED_LIBS=Off -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache .. 
+                            CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
+
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+
+                stage('Hip Normal Find Mode Release') {
+                    agent{ label rocmnode("vega") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On .. 
+                            make -j test_conv2d
+                            MIOPEN_FIND_MODE=1 CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 bin/test_conv2d --disable-verification-cache
+                        """
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+
+                stage('Hip Fast Find Mode Release') {
+                    agent{ label rocmnode("vega") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On .. 
+                            make -j test_conv2d
+                            MIOPEN_FIND_MODE=2 CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 bin/test_conv2d --disable-verification-cache
+                        """
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+
+                stage('Hip Release on /usr/local') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('hcc', '-DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+
+            }
+        }
+
+        // Run fp16, bfp16, and int8 quick tests
+        stage("Fast low precision"){
+            parallel{
+                stage('Half Hip Release') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_HALF=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image + "rocm")
+                    }
+                }
+
+                stage('Half GCC Debug') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('g++-5', '-DMIOPEN_TEST_HALF=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image, "")
+                    }
+                }
+    
+                stage('Half GCC Release') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('g++-5', '-DMIOPEN_TEST_HALF=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+
+                stage('Int8 Hip Release') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_INT8=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image + "rocm")
+                    }
+                }
+
+                stage('Int8 GCC Debug') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('g++-5', '-DMIOPEN_TEST_INT8=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image, "")
+                    }
+                }
+
+                stage('Int8 GCC Release') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('g++-5', '-DMIOPEN_TEST_INT8=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+
+                stage('Bfloat16 Hip Release') {
+                    agent{ label rocmnode("vega20") }   
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_BFLOAT16=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release', "", image + "rocm")
+                    }
+                }
+
+                stage('Bfloat16 gfx908 Hip Debug') {
+                    agent{ label rocmnode("gfx908") }   
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_BFLOAT16=On -DMIOPEN_TEST_GFX908=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image + "rocm")
+                    }
+                }
+
+                stage('Half gfx908 Hip Debug') {
+                    agent{ label rocmnode("gfx908") }   
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_BFLOAT16=On -DMIOPEN_TEST_GFX908=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug', "", image + "rocm")
+                    }
+                }
+            }
+        }
+
+        stage("Full tests I"){
+            parallel{
+                stage('Int8 Hip Release All') {
+                    agent{ label rocmnode("vega20") }
+                    steps{
+                        buildJob('hcc', '-DMIOPEN_TEST_INT8=On -DBUILD_DEV=On -DMIOPEN_TEST_ALL=On -DCMAKE_BUILD_TYPE=release', "", image + "rocm")
+                    }
+                }
+
+                stage('Bfloat16 Hip Release All') {
+                    agent{ label rocmnode("vega20") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DMIOPEN_TEST_BFLOAT16=On -DMIOPEN_TEST_ALL=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On .. 
+                            make -j test_conv2d
+                        """
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+
+ 
+                stage('Bfloat16 gfx908 Hip Release All Subset') {
                     agent{ label rocmnode("gfx908") }
                     environment{
                         cmd = """
@@ -160,118 +471,92 @@ pipeline {
                             rm -rf build
                             mkdir build
                             cd build
-                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
-                            make -j\$(nproc)
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DMIOPEN_TEST_BFLOAT16=On -DMIOPEN_TEST_GFX908=On -DMIOPEN_TEST_ALL=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On .. 
+                            MIOPEN_LOG_LEVEL=5 CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+            }
+        }
 
-                            export MIOPEN_FIND_MODE=NORMAL;
-                            export MIOPEN_DEBUG_CONV_IMPLICIT_GEMM_XDLOPS=1 ;
-                            export MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0;
-                            export MIOPEN_LOG_LEVEL=3;
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=64;
-                            ./bin/MIOpenDriver   conv -x 1 -y 1 -W 25 -H 25 -c 1600 -n 32 -k 1600 -g 25 -p 0 -q 0 -time 1 -F 1 -V 1;
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=72;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;                            
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=64;
-                            ./bin/MIOpenDriver   conv -x 1 -y 1 -W 19 -H 19 -c 2304 -n 32 -k 2304 -g 36 -p 0 -q 0 -time 1 -F 1 -V 1;
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=73;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=64;
-                            ./bin/MIOpenDriver   conv -x 1 -y 1 -W 15 -H 15 -c 3136 -n 32 -k 3136 -g 49 -p 0 -q 0 -time 1 -F 1 -V 1;
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=74;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+        stage("Full tests II"){
+            parallel{
+                stage('GCC Release All') {
+                    agent{ label rocmnode("vega") }
+                    steps{
+                        buildJob('g++-5', '-DBUILD_DEV=On -DMIOPEN_TEST_ALL=On -DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+                
+                stage('FP32 gfx908 Hip Release All subset') {
+                    agent{ label rocmnode("gfx908") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DMIOPEN_TEST_GFX908=On -DMIOPEN_TEST_ALL=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On .. 
+                            MIOPEN_LOG_LEVEL=5 CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+                
+                stage('Half gfx908 Hip Release All Subset') {
+                    agent{ label rocmnode("gfx908") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DMIOPEN_TEST_HALF=On -DMIOPEN_TEST_GFX908=On -DMIOPEN_TEST_ALL=On -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On .. 
+                            MIOPEN_LOG_LEVEL=5 CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "",  image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
+            }
+        }
 
+        stage("Full tests III"){
+            parallel{
+                stage('Half Hip Clang Release All') {
+                    agent{ label rocmnode("vega20") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_TEST_HALF=On -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_ALL=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache .. 
+                            CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
+                        """
 
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
+                    }
+                    steps{
+                        buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "", image+'-hip-clang', "/usr/local", cmd)
+                    }
+                }
 
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=73
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=74
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-
-                            export MIOPEN_DEBUG_FIND_ONLY_SOLVER=75
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 128 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 128 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 256 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38  -H 38 -c 256 -n 32 -k 324 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10  -H 10 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19  -H 19 -c 512 -n 32 -k 486 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver   conv -x 3 -y 3 -W 75 -H 75 -c 64 -n 32 -k 64 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 128 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 128 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 5 -H 5 -c 256 -n 32 -k 486   -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 256 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 4 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 99 -n 13 -k 99 -g 11 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 9 -H 9 -c 13 -n 7 -k 13 -g 1 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 38 -H 38 -c 256 -n 32 -k 324 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 10 -H 10 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-                            ./bin/MIOpenDriver conv -x 3 -y 3 -W 19 -H 19 -c 512 -n 32 -k 486 -g 32 -p 1 -q 1 -time 1 -F 3 -V 1;
-
+                stage('Hip Clang Release All') {
+                    agent{ label rocmnode("vega20") }
+                    environment{
+                        cmd = """
+                            ulimit -c unlimited
+                            rm -rf build
+                            mkdir build
+                            cd build
+                            CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=release -DMIOPEN_GPU_SYNC=On -DMIOPEN_TEST_ALL=On -DMIOPEN_TEST_FLAGS=--disable-verification-cache .. 
+                            CTEST_PARALLEL_LEVEL=4 MIOPEN_DEBUG_IMPLICIT_GEMM_NON_XDLOPS_INLINE_ASM=0 MIOPEN_CONV_PRECISE_ROCBLAS_TIMING=0 make -j\$(nproc) check
                         """
 
                     }
@@ -282,46 +567,24 @@ pipeline {
             }
         }
 
-        //stage("Kamil's custom stages Backwards"){
-        //    parallel{
-        //        stage('Backwards clang') {
-        //            agent{ label rocmnode("gfx908") }
-        //            environment{
-        //                cmd = """
-        //                    ulimit -c unlimited
-        //                    rm -rf build
-        //                    mkdir build
-        //                    cd build
-        //                    CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
-        //                    make -j\$(nproc) 
-        //                    MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0 MIOPEN_LOG_LEVEL=6 ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 2 -V 1
-        //                """
-        //
-        //            }
-        //            steps{
-        //                buildHipClangJob('/opt/rocm/llvm/bin/clang++', '', "", image+'-hip-clang', "/usr/local", cmd)
-        //            }
-        //        }
-        //        stage('Backwards hcc') {
-        //            agent{ label rocmnode("gfx908") }
-        //            environment{
-        //                cmd = """
-        //                    ulimit -c unlimited
-        //                    rm -rf build
-        //                    mkdir build
-        //                    cd build
-        //                    CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_BUILD_TYPE=debug .. 
-        //                    make -j\$(nproc) 
-        //                    MIOPEN_DEBUG_AMD_WINOGRAD_3X3=0 MIOPEN_LOG_LEVEL=6 ./bin/MIOpenDriver conv -x 3 -y 3 -W 28 -H 28 -c 192 -n 16 -k 32 -g 1 -p 1 -q 1 -time 1 -F 2 -V 1
-        //                """
-        //
-        //            }
-        //            steps{
-        //                buildJob('hcc', '', "", image + "rocm", "/usr/local", cmd)
-        //            }
-        //        }
-        //    }
-        //}
+
+       // Run package building
+        stage("Packages"){
+            parallel {
+                stage('GCC OpenCL Release package') {
+                    agent{ label rocmnode("rocmtest") }
+                    steps{
+                        buildJob('g++-5', '-DCMAKE_BUILD_TYPE=release', "", image, "")
+                    }
+                }
+                stage("HCC HIP Release package"){
+                    agent{ label rocmnode("rocmtest") }
+                    steps{
+                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image + "rocm")
+                    }
+                }
+            }
+        }
     }    
 }
 
