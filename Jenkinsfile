@@ -149,47 +149,47 @@ pipeline {
     }
     stages{
         // Run all static analysis tests
-        stage("Static checks"){
-            parallel{
-                stage('Clang Tidy') {
-                    agent{  label rocmnode("rocmtest") }
-                    environment{
-                        cmd = "rm -rf build; mkdir build; cd build; CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
-                    }
-                    steps{
-                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
-                    }
-                }
+        //stage("Static checks"){
+        //    parallel{
+        //        stage('Clang Tidy') {
+        //            agent{  label rocmnode("rocmtest") }
+        //            environment{
+        //                cmd = "rm -rf build; mkdir build; cd build; CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
+        //            }
+        //            steps{
+        //                buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
+        //            }
+        //        }
 
-                stage('Clang Format') {
-                    agent{ label rocmnode("rocmtest") }
-                    environment{
-                        cmd = "find . -iname \'*.h\' \
-                                -o -iname \'*.hpp\' \
-                                -o -iname \'*.cpp\' \
-                                -o -iname \'*.h.in\' \
-                                -o -iname \'*.hpp.in\' \
-                                -o -iname \'*.cpp.in\' \
-                                -o -iname \'*.cl\' \
-                                | grep -v 'build/' \
-                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
-                    }
-                    steps{
-                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
-                    }
-                }
+        //        stage('Clang Format') {
+        //            agent{ label rocmnode("rocmtest") }
+        //            environment{
+        //                cmd = "find . -iname \'*.h\' \
+        //                        -o -iname \'*.hpp\' \
+        //                        -o -iname \'*.cpp\' \
+        //                        -o -iname \'*.h.in\' \
+        //                        -o -iname \'*.hpp.in\' \
+        //                        -o -iname \'*.cpp.in\' \
+        //                        -o -iname \'*.cl\' \
+        //                        | grep -v 'build/' \
+        //                        | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
+        //            }
+        //            steps{
+        //                buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
+        //            }
+        //        }
 
-                stage('Hip Tidy') {
-                    agent{ label rocmnode("rocmtest") }
-                    environment{
-                        cmd = "rm -rf build; mkdir build; cd build; CXX=/usr/local/bin/hcc cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
-                    }
-                    steps{
-                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
-                    }
-                }
-            }
-        }
+        //        stage('Hip Tidy') {
+        //            agent{ label rocmnode("rocmtest") }
+        //            environment{
+        //                cmd = "rm -rf build; mkdir build; cd build; CXX=/usr/local/bin/hcc cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
+        //            }
+        //            steps{
+        //                buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', "", image, "", cmd)
+        //            }
+        //        }
+        //    }
+        //}
         
         // Run quick fp32 tests
         stage("Fast full precision"){

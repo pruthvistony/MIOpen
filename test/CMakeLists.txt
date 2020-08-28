@@ -49,7 +49,7 @@ else()
 endif()
 
 find_package(Threads REQUIRED)
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C ${CMAKE_CFG_INTDIR})
+add_custom_target(check COMMAND MIOPEN_ENABLE_LOGGING=1 MIOPEN_LOG_LEVEL=5 ${CMAKE_CTEST_COMMAND} --verbose -C ${CMAKE_CFG_INTDIR})
 add_custom_target(tests)
 
 set(SKIP_TESTS)

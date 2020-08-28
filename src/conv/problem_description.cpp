@@ -95,6 +95,7 @@ void ProblemDescription::BuildConfKey(std::string& conf_key) const
     ss << 'x' << (GetDirection() == Direction::Forward ? "1" : "0");
 
     conf_key = ss.str();
+    std::cout << conf_key << std::endl;
 }
 
 void ProblemDescription::Serialize(std::ostream& stream) const

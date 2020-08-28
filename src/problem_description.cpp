@@ -61,6 +61,7 @@ int ProblemDescription::mloBuildConf_Key(std::string& conf_key) const
 
     conf_key = ss.str();
 
+    std::cout << conf_key << std::endl;
     return (0);
 }
 
